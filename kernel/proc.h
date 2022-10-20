@@ -104,6 +104,6 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
-  int mask;                    //trace 使用的掩码
+  int mask;                    //trace 使用的掩码,系统调用都设置在这个mask里面，第一个bit位就是系统调研参数为1
   
 };

@@ -1,6 +1,7 @@
 struct stat;
-
+struct sysinfo;//先声明这个结构体的存在
 // system calls
+//函数声明
 int fork(void);
 int exit(int) __attribute__((noreturn));
 int wait(int*);
@@ -23,6 +24,7 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 int trace(int);
+int sysinfo(struct sysinfo*);//声明以下这个函数
 
 // ulib.c
 int stat(const char*, struct stat*);

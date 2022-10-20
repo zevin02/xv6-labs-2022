@@ -80,3 +80,20 @@ kalloc(void)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
 }
+
+
+//收集空闲内存量
+void colletmemory(uint64* freemem)
+{
+  //统计空闲的内存量大小
+  *freemem=0;
+  struct run* r;
+  acquire(&kmem.lock);
+  r=kmem.freelist;//获得空闲的链表
+  while(r)
+  {
+    (*freemem)+=PGSIZE;
+    r=r->next;
+  }
+  release(&kmem.lock);
+}

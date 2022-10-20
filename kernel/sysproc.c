@@ -5,6 +5,8 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "sysinfo.h"
+#include "stat.h"
 
 uint64
 sys_exit(void)
@@ -94,13 +96,45 @@ sys_uptime(void)
   return xticks;
 }
 
+//实现系统调用
 uint64
 sys_trace(void)
 {
   int mask;
-  argint(0, &mask);//从内核中获取参数
- 
-  myproc()->mask=mask;//把这个掩码进行设置
+  argint(0, &mask); //从内核中获取参数int参数使用这个函数，把获得的数值放到mask里面
+
+  myproc()->mask = mask; //把这个掩码进行设置，这个数值就是proc里面的mask，设置进去
+
+  return 0;
+}
+
+uint64
+sys_sysinfo(void)
+{
+  // struct sysinfo si;
+  // uint64 addr; //用户指针指向struct sysinfo,获得虚拟地址
+  // argaddr(1, &addr);//
+  // unsetprocnum(&si.nproc);   //从内核里面获取空闲进程数，放到结构体里面
+  // colletmemory(&si.freemem); //从内核里面获取红线的内存量
+
+  // struct proc *p = myproc();
+  // if (copyout(p->pagetable, addr, (char *)&si, sizeof(si)) < 0)
+  // {
+  //   return -1;
+  // }
+  // return 0;
+
+    struct sysinfo info;
+  colletmemory(&info.freemem);
+  unsetprocnum(&info.nproc);
+
+  // 获取虚拟地址
+  uint64 dstaddr;
+  argaddr(0, &dstaddr);
+
+  // 从内核空间拷贝数据到用户空间
+  if (copyout(myproc()->pagetable, dstaddr, (char *)&info, sizeof info) < 0)
+    return -1;
 
   return 0;
 }
