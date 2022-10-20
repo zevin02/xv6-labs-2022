@@ -111,30 +111,17 @@ sys_trace(void)
 uint64
 sys_sysinfo(void)
 {
-  // struct sysinfo si;
-  // uint64 addr; //用户指针指向struct sysinfo,获得虚拟地址
-  // argaddr(1, &addr);//
-  // unsetprocnum(&si.nproc);   //从内核里面获取空闲进程数，放到结构体里面
-  // colletmemory(&si.freemem); //从内核里面获取红线的内存量
+  struct sysinfo si;
+  unsetprocnum(&si.nproc);   //从内核里面获取空闲进程数，放到结构体里面
+  colletmemory(&si.freemem); //从内核里面获取红线的内存量
+  uint64 addr; //用户指针指向struct sysinfo,获得虚拟地址
+  argaddr(0, &addr);//
 
-  // struct proc *p = myproc();
-  // if (copyout(p->pagetable, addr, (char *)&si, sizeof(si)) < 0)
-  // {
-  //   return -1;
-  // }
-  // return 0;
-
-    struct sysinfo info;
-  colletmemory(&info.freemem);
-  unsetprocnum(&info.nproc);
-
-  // 获取虚拟地址
-  uint64 dstaddr;
-  argaddr(0, &dstaddr);
-
-  // 从内核空间拷贝数据到用户空间
-  if (copyout(myproc()->pagetable, dstaddr, (char *)&info, sizeof info) < 0)
+  struct proc *p = myproc();
+  if (copyout(p->pagetable, addr, (char *)&si, sizeof(si)) < 0)
+  {
     return -1;
-
+  }
   return 0;
+
 }

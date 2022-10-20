@@ -702,25 +702,25 @@ void procdump(void)
 }
 
 
-void unsetprocnum(uint64* dst)//收集进程数
+void unsetprocnum(uint64* nproc)//收集进程数
 {
   // //收集进程数字
-  // *nproc=0;
-  // struct proc *p;
-  // for (p = proc; p < &proc[NPROC]; p++)
-  // {
-  //   acquire(&p->lock);//上锁进行下面一系列操作
-
-  //   if (p->state != UNUSED)//收集进程为UNUSED的数
-  //   {
-  //     (*nproc)++;
-  //   }
-  //   release(&p->lock);
-  // }
-    *dst = 0;
+  *nproc=0;
   struct proc *p;
-  for (p = proc; p < &proc[NPROC]; p++) {
-    if (p->state != UNUSED)
-      (*dst)++;
+  for (p = proc; p < &proc[NPROC]; p++)
+  {
+    acquire(&p->lock);//上锁进行下面一系列操作
+
+    if (p->state != UNUSED)//收集进程为UNUSED的数
+    {
+      (*nproc)++;
+    }
+    release(&p->lock);
   }
+  //   *dst = 0;
+  // struct proc *p;
+  // for (p = proc; p < &proc[NPROC]; p++) {
+  //   if (p->state != UNUSED)
+  //     (*dst)++;
+  // }
 }
