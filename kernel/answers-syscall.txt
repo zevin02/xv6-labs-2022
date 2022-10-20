@@ -1,0 +1,16 @@
+usertrap()
+
+p->trapframe->a7 =7
+represent:SYS_exec
+
+the previous mode that the CPU was in privileged mode
+
+a3
+
+
+
+initcode
+
+1
+
+

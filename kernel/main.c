@@ -10,6 +10,9 @@ volatile static int started = 0;
 void
 main()
 {
+  while(1){
+    ;
+  }
   if(cpuid() == 0){
     consoleinit();
     printfinit();
