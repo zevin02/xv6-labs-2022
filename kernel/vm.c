@@ -21,10 +21,11 @@ kvmmake(void)
 {
   pagetable_t kpgtbl;
 
-  kpgtbl = (pagetable_t) kalloc();
-  memset(kpgtbl, 0, PGSIZE);
+  kpgtbl = (pagetable_t) kalloc();//为kernel分配物理page
+  memset(kpgtbl, 0, PGSIZE);//将内存初始化为0
 
   // uart registers
+  //将这些IO设备映射到内核
   kvmmap(kpgtbl, UART0, UART0, PGSIZE, PTE_R | PTE_W);
 
   // virtio mmio disk interface
@@ -65,6 +66,7 @@ kvminithart()
   sfence_vma();
 
   w_satp(MAKE_SATP(kernel_pagetable));
+  //设置一个satp寄存器,在这个适龄执行之前，使用的都是物理地址，执行之后，所有的地址都变成了虚拟地址
 
   // flush stale entries from the TLB.
   sfence_vma();

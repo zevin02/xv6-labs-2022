@@ -73,7 +73,8 @@ kalloc(void)
   acquire(&kmem.lock);
   r = kmem.freelist;
   if(r)
-    kmem.freelist = r->next;
+    kmem.freelist = r->next;//kem里面串联的就是空闲的空间，
+    //如果r存在，说明有空间，那么kem就要往后走，前面的都是用过的，后面的都是空闲的
   release(&kmem.lock);
 
   if(r)
