@@ -23,7 +23,7 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
-int trace(int);
+int trace(int);//声明这个系统调用函数
 int sysinfo(struct sysinfo*);//声明以下这个函数
 
 // ulib.c
