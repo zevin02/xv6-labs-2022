@@ -118,7 +118,7 @@ sys_sysinfo(void)
   argaddr(0, &addr);//
 
   struct proc *p = myproc();
-  if (copyout(p->pagetable, addr, (char *)&si, sizeof(si)) < 0)
+  if (copyout(p->pagetable, addr, (char *)&si, sizeof(si)) < 0)//把从内核获得的参数，拷贝给用户态
   {
     return -1;
   }

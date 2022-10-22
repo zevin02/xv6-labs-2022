@@ -86,7 +86,7 @@ void colletmemory(uint64 *freemem)
   //统计空闲的内存量大小
   *freemem = 0;
   struct run *r;
-  acquire(&kmem.lock);
+  acquire(&kmem.lock);//上锁
   r = kmem.freelist; //获得空闲的链表
   while (r)
   {

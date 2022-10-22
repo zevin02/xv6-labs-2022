@@ -29,7 +29,7 @@ int fetchstr(uint64 addr, char *buf, int max)
 }
 
 static uint64
-argraw(int n)
+argraw(int n)//检索用户发过来的参数
 {
   struct proc *p = myproc();
   switch (n)
@@ -154,20 +154,20 @@ static char *syscallname[] = {
     "close",
     "trace",
     "sysinfo"
-};//系统调用名
+};//系统调用名，静态修饰，只能在这个文件里面调用
 
 void syscall(void)
 {
   int num;
   struct proc *p = myproc();
 
-  num = p->trapframe->a7; // num里面存放的数字就是要调用的系统调用对应的数字
+  num = p->trapframe->a7; // num里面存放的数字就是要调用的系统调用对应的数字,可能会有多个
   // num = * (int *) 0;
   if (num > 0 && num < NELEM(syscalls) && syscalls[num])
   {
     // Use num to lookup the system call function for num, call it,
     // and store its return value in p->trapframe->a0
-    p->trapframe->a0 = syscalls[num]();
+    p->trapframe->a0 = syscalls[num]();//把系统调用的返回数值放到a0里面
     //系统调用执行完，打印一个消息
     if ((1 << num) & p->mask) //把他按位与以下，判断是否在mask里面,从里面检索，发现只要有，里面设置的系统调用，就触发这个地方，打印出来
     {
@@ -178,6 +178,6 @@ void syscall(void)
   {
     printf("%d %s: unknown sys call %d\n",
            p->pid, p->name, num);
-    p->trapframe->a0 = -1;
+    p->trapframe->a0 = -1;//系统调用出错，返回-1,再调回给上一层
   }
 }

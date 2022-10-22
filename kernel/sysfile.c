@@ -113,7 +113,7 @@ sys_fstat(void)
   struct file *f;
   uint64 st; // user pointer to struct stat
 
-  argaddr(1, &st);
+  argaddr(1, &st);//获得参数，这里就要设置成1
   if(argfd(0, 0, &f) < 0)
     return -1;
   return filestat(f, st);
