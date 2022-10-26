@@ -328,7 +328,8 @@ sfence_vma()
 }
 
 typedef uint64 pte_t;
-typedef uint64 *pagetable_t; // 512 PTEs
+typedef uint64 *pagetable_t; // 512 PTEs    他本质上就是指向根页表页的指针
+//一个pagetable_t 可以内核页表也可以是进程页表
 
 #endif // __ASSEMBLER__
 
@@ -338,6 +339,7 @@ typedef uint64 *pagetable_t; // 512 PTEs
 #define PGROUNDUP(sz)  (((sz)+PGSIZE-1) & ~(PGSIZE-1))
 #define PGROUNDDOWN(a) (((a)) & ~(PGSIZE-1))
 
+//条目里面的标志位，之后进行按位或组合即可
 #define PTE_V (1L << 0) // valid
 #define PTE_R (1L << 1)
 #define PTE_W (1L << 2)
@@ -352,6 +354,7 @@ typedef uint64 *pagetable_t; // 512 PTEs
 #define PTE_FLAGS(pte) ((pte) & 0x3FF)
 
 // extract the three 9-bit page table indices from a virtual address.
+//从虚拟地址中提炼3个9bit的页表格
 #define PXMASK          0x1FF // 9 bits
 #define PXSHIFT(level)  (PGSHIFT+(9*(level)))
 #define PX(level, va) ((((uint64) (va)) >> PXSHIFT(level)) & PXMASK)

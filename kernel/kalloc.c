@@ -1,6 +1,7 @@
 // Physical memory allocator, for user processes,
 // kernel stacks, page-table pages,
 // and pipe buffers. Allocates whole 4096-byte pages.
+//物理内存分配
 
 #include "types.h"
 #include "param.h"
@@ -19,15 +20,15 @@ struct run {
 };
 
 struct {
-  struct spinlock lock;
-  struct run *freelist;
+  struct spinlock lock;//自旋锁
+  struct run *freelist;//空闲页的列表元素是一个struct run
 } kmem;
 
 void
-kinit()
+kinit()//初始化空闲列表，保存从内核结束到PHYSTOP中的每一页，
 {
-  initlock(&kmem.lock, "kmem");
-  freerange(end, (void*)PHYSTOP);
+  initlock(&kmem.lock, "kmem");//初始化锁
+  freerange(end, (void*)PHYSTOP);//将内存添加到闲散列表中，
 }
 
 void
@@ -36,7 +37,7 @@ freerange(void *pa_start, void *pa_end)
   char *p;
   p = (char*)PGROUNDUP((uint64)pa_start);
   for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE)
-    kfree(p);
+    kfree(p);//每页都调用这个
 }
 
 // Free the page of physical memory pointed at by pa,
@@ -44,7 +45,7 @@ freerange(void *pa_start, void *pa_end)
 // call to kalloc().  (The exception is when
 // initializing the allocator; see kinit above.)
 void
-kfree(void *pa)
+kfree(void *pa)//分配一些管理空间
 {
   struct run *r;
 
@@ -52,21 +53,23 @@ kfree(void *pa)
     panic("kfree");
 
   // Fill with junk to catch dangling refs.
-  memset(pa, 1, PGSIZE);
+  memset(pa, 1, PGSIZE);//
 
-  r = (struct run*)pa;
+  r = (struct run*)pa;//把地址视为指针。以便操作存储在每个页面中的run结构
 
   acquire(&kmem.lock);
   r->next = kmem.freelist;
-  kmem.freelist = r;
+  kmem.freelist = r;//添加闲散的数据
   release(&kmem.lock);
 }
 
 // Allocate one 4096-byte page of physical memory.
 // Returns a pointer that the kernel can use.
 // Returns 0 if the memory cannot be allocated.
+
+//分配一个4页大小给物理地址
 void *
-kalloc(void)
+kalloc(void)//删除并返回空闲列表中的第一个元素
 {
   struct run *r;
 

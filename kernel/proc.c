@@ -29,6 +29,9 @@ struct spinlock wait_lock;
 // Allocate a page for each process's kernel stack.
 // Map it high in memory, followed by an invalid
 // guard page.
+
+//为每个进程分配一个内核堆栈，把他映射在内存的高位，下面是guard page
+
 void
 proc_mapstacks(pagetable_t kpgtbl)
 {
@@ -39,11 +42,13 @@ proc_mapstacks(pagetable_t kpgtbl)
     if(pa == 0)
       panic("kalloc");
     uint64 va = KSTACK((int) (p - proc));
-    kvmmap(kpgtbl, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+    kvmmap(kpgtbl, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);//映射到KSTACK位置处，下面就是invalid guard page
+
   }
 }
 
 // initialize the proc table.
+//为每个进程分配一个内核栈
 void
 procinit(void)
 {
@@ -54,7 +59,7 @@ procinit(void)
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
       p->state = UNUSED;
-      p->kstack = KSTACK((int) (p - proc));
+      p->kstack = KSTACK((int) (p - proc));//将每个栈映射到KSTACK生成的虚拟地址中
   }
 }
 
@@ -256,6 +261,7 @@ userinit(void)
 
 // Grow or shrink user memory by n bytes.
 // Return 0 on success, -1 on failure.
+//增长或减少内存的空间，
 int
 growproc(int n)
 {
@@ -264,6 +270,7 @@ growproc(int n)
 
   sz = p->sz;
   if(n > 0){
+    //n>0调用增长函数
     if((sz = uvmalloc(p->pagetable, sz, sz + n, PTE_W)) == 0) {
       return -1;
     }
