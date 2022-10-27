@@ -14,7 +14,7 @@ main(int argc, char *argv[])
     exit(1);
   }
 
-  if (trace(atoi(argv[1])) < 0) {
+  if (trace(atoi(argv[1])) < 0) {//使用trace来跟踪系统调用
     fprintf(2, "%s: trace failed\n", argv[0]);
     exit(1);
   }

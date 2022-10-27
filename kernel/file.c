@@ -92,9 +92,9 @@ filestat(struct file *f, uint64 addr)
   
   if(f->type == FD_INODE || f->type == FD_DEVICE){
     ilock(f->ip);
-    stati(f->ip, &st);
+    stati(f->ip, &st);//从内核里面获得参数，拷贝到我们定义的结构体里面
     iunlock(f->ip);
-    if(copyout(p->pagetable, addr, (char *)&st, sizeof(st)) < 0)
+    if(copyout(p->pagetable, addr, (char *)&st, sizeof(st)) < 0)//拷贝到用户空间里面，都在st里面
       return -1;
     return 0;
   }

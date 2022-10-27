@@ -1,6 +1,7 @@
 struct stat;
-
+struct sysinfo;//先声明这个结构体的存在
 // system calls
+//函数声明
 int fork(void);
 int exit(int) __attribute__((noreturn));
 int wait(int*);
@@ -22,14 +23,9 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
-#ifdef LAB_NET
-int connect(uint32, uint16, uint16);
-#endif
-#ifdef LAB_PGTBL
-int pgaccess(void *base, int len, void *mask);
-// usyscall region
-int ugetpid(void);
-#endif
+
+int trace(int);//声明这个系统调用函数
+int sysinfo(struct sysinfo*);//声明以下这个函数
 
 // ulib.c
 int stat(const char*, struct stat*);
