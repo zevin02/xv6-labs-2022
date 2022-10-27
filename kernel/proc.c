@@ -139,13 +139,13 @@ found:
     release(&p->lock);
     return 0;
   }
-  if ((p->labpid = (struct usyscall *)kalloc()) == 0)
+  if ((p->labpid = (struct usyscall *)kalloc()) == 0) //开辟一块内存空间给p->labpid
   {
     freeproc(p);
     release(&p->lock);
     return 0;
   }
-  p->labpid->pid = p->pid;
+  p->labpid->pid = p->pid; //因为是加快get_pid效率，所以就是等于pid的值，给用户就可以直接访问
 
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
@@ -174,6 +174,10 @@ freeproc(struct proc *p)
   if (p->trapframe)
     kfree((void *)p->trapframe);
   p->trapframe = 0;
+  if (p->labpid)
+    kfree((void *)p->labpid);
+  p->labpid = 0;
+
   if (p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
 
@@ -210,14 +214,7 @@ proc_pagetable(struct proc *p)
     uvmfree(pagetable, 0);
     return 0;
   }
-  if (mappages(pagetable, USYSCALL, PGSIZE,
-               (uint64)(p->labpid), PTE_R|PTE_U) < 0)
-  {
-    uvmunmap(pagetable, USYSCALL, 1, 0);
-    // uvmunmap(pagetable, TRAMPOLINE, 1, 0);
-    uvmfree(pagetable, 0);
-    return 0;
-  }
+
   // map the trapframe page just below the trampoline page, for
   // trampoline.S.
   if (mappages(pagetable, TRAPFRAME, PGSIZE,
@@ -227,7 +224,15 @@ proc_pagetable(struct proc *p)
     uvmfree(pagetable, 0);
     return 0;
   }
-
+  //在这里对虚拟地址USYSCALL进行映射
+  if (mappages(pagetable, USYSCALL, PGSIZE,
+               (uint64)(p->labpid), PTE_R | PTE_U) < 0)
+  {
+    uvmunmap(pagetable, USYSCALL, 1, 0);
+    uvmunmap(pagetable, TRAMPOLINE, 1, 0); //失败了也要把蹦床页表给取消映射,因为上面已经映射了
+    uvmfree(pagetable, 0);
+    return 0;
+  }
   return pagetable;
 }
 
