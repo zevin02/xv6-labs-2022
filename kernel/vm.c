@@ -501,3 +501,23 @@ void vmprint(pagetable_t pagetable)
   printf("page table %p\n", pagetable);
   _vmprint(pagetable, 1);
 }
+
+int pgaccess(pagetable_t pagetable, uint64 va)
+{
+  if(va>=MAXVA)
+  {
+    return 0;
+  }
+  pte_t *pte = walk(pagetable, va, 0);
+  if(pte==0)
+  {
+    return 0;
+  }
+  if (*pte & PTE_A)
+  {
+    *pte &= (~PTE_A); //把这个标志位清理
+    return 1;
+  }
+
+  return 0;
+}

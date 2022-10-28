@@ -83,28 +83,17 @@ int sys_pgaccess(void)
   argaddr(0, &base);
   int mask; //返回给用户的掩码
   argint(2, &mask);
-
+  struct proc* p=myproc();
+  int n=0;
   // walk()，遍历，查看谁被使用了
-  for(int i=0;i<len;i++)
+  for (int i = 0; i < len; i++)
   {
-    pte_t *pte = walk(myproc()->pagetable, base+i*PGSIZE, 0);
-    if (*pte &PTE_A)
-    {
-      int l=0;
-      while(l<32)
-      {
-        if((mask&(1<<i))==0)
-        {
-          mask&=(1<<i);
-          break;
-        }
-      }
-      *pte&=(~PTE_A);
-    }
+    int ret=pgaccess(p->pagetable,base+i*PGSIZE);//返回为真，这个标志位可以
+    n|=(ret<<i);
+    
   }
-
   // copyout to usersppace
-  if(copyout(myproc()->pagetable,base,(char*)&mask,sizeof(mask))<0)
+  if (copyout(p->pagetable, mask, (char *)&n, sizeof(n)) < 0)
   {
     return -1;
   }
