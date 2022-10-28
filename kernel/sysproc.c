@@ -81,19 +81,20 @@ int sys_pgaccess(void)
   argint(1, &len); //获取参数
   uint64 base;
   argaddr(0, &base);
-  int mask; //返回给用户的掩码
+  int mask; //返回给用户的掩码，物理地址，传送数据到这里
   argint(2, &mask);
-  struct proc* p=myproc();
-  int n=0;
+  struct proc *p = myproc();
+  int n = 0;
   // walk()，遍历，查看谁被使用了
   for (int i = 0; i < len; i++)
   {
-    int ret=pgaccess(p->pagetable,base+i*PGSIZE);//返回为真，这个标志位可以
-    n|=(ret<<i);
-    
+    if (pgaccess(p->pagetable, base + i * PGSIZE)) //返回为真，这个标志位可以
+    {
+      n |= (1 << i);//如果该标志位为真，
+    }
   }
   // copyout to usersppace
-  if (copyout(p->pagetable, mask, (char *)&n, sizeof(n)) < 0)
+  if (copyout(p->pagetable, mask, (char *)&n, sizeof(n)) < 0) //把数据拷贝到mask里面，拷贝的数据在n里面，
   {
     return -1;
   }

@@ -508,12 +508,12 @@ int pgaccess(pagetable_t pagetable, uint64 va)
   {
     return 0;
   }
-  pte_t *pte = walk(pagetable, va, 0);
+  pte_t *pte = walk(pagetable, va, 0);//walk获得最终的pte，pte的后10位是标志位，44位是ppn
   if(pte==0)
   {
     return 0;
   }
-  if (*pte & PTE_A)
+  if (*pte & PTE_A)//被访问过。我们就设置，对应的掩码要被设置
   {
     *pte &= (~PTE_A); //把这个标志位清理
     return 1;
