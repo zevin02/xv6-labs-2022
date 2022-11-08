@@ -91,7 +91,7 @@ usertrap(void)
 
 //
 // return to user space
-//该函数设置risc-v控制寄存器，为将来来自用户空间的陷阱作准备
+//该函数设置risc-v控制寄存器，为将来来自用户空间的陷阱作准备，这是返回到用户空间的最后一个C函数
 void
 usertrapret(void)
 {
@@ -131,8 +131,8 @@ usertrapret(void)
   // jump to userret in trampoline.S at the top of memory, which 
   // switches to the user page table, restores user registers,
   // and switches to user mode with sret.
-  uint64 trampoline_userret = TRAMPOLINE + (userret - trampoline);
-  ((void (*)(uint64))trampoline_userret)(satp);//调用userret，
+  uint64 trampoline_userret = TRAMPOLINE + (userret - trampoline);//
+  ((void (*)(uint64))trampoline_userret)(satp);//调用userret，在这里调用函数，这里无论调用什么参数，这里都是trapframe和用户页表，这里的第一个参数就进入到a0里面
   // userytrap在用户和内核页标中都映射的蹦床页面上调用userret，userret中的汇编代码会切换页表，
 
 }

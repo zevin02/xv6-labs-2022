@@ -44,8 +44,10 @@ extern struct cpu cpus[NCPU];
 //因为satp仍然指向用户页表，所以uservec需要将陷阱帧映射到用户地址空间中，每当创建一个进程时，就为这个进程的陷阱帧分配一个页面
 //并把他映射到用户虚拟地址TRAPFRAME，该地址在TRAMPOLINE下面，内核可以使用内核页表来使用它
 //陷阱帧里面包含内核栈的指针，当前CPU 的hartid，和内核页标的地址，uservec取得这些值，将satp切换到内核页标，调用usertrap
+//这前面的5个数据都是内核事先先放进去的数据
+// 内核非常方便的将trapframe page映射到每个user page table里面
 struct trapframe {
-  /*   0 */ uint64 kernel_satp;   // kernel page table
+  /*   0 */ uint64 kernel_satp;   // kernel page table，保存了kernel page table的地址，trap处理代码并且放到satp寄存器里面的数值
   /*   8 */ uint64 kernel_sp;     // top of process's kernel stack
   /*  16 */ uint64 kernel_trap;   // usertrap()
   /*  24 */ uint64 epc;           // saved user program counter
