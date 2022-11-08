@@ -40,6 +40,10 @@ extern struct cpu cpus[NCPU];
 // the trapframe includes callee-saved user registers like s0-s11 because the
 // return-to-user path via usertrapret() doesn't return through
 // the entire kernel call stack.
+// uservec在进入用户空间之前，内核先将sscratch设置为指向一个每个进程的陷阱帧，该帧具有保存所有用户寄存器的空间
+//因为satp仍然指向用户页表，所以uservec需要将陷阱帧映射到用户地址空间中，每当创建一个进程时，就为这个进程的陷阱帧分配一个页面
+//并把他映射到用户虚拟地址TRAPFRAME，该地址在TRAMPOLINE下面，内核可以使用内核页表来使用它
+//陷阱帧里面包含内核栈的指针，当前CPU 的hartid，和内核页标的地址，uservec取得这些值，将satp切换到内核页标，调用usertrap
 struct trapframe {
   /*   0 */ uint64 kernel_satp;   // kernel page table
   /*   8 */ uint64 kernel_sp;     // top of process's kernel stack

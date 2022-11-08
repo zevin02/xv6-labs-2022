@@ -32,7 +32,7 @@ trapinithart(void)
 //
 // handle an interrupt, exception, or system call from user space.
 // called from trampoline.S
-//
+//usertrap任务是确认陷阱的原因，处理之后并返回，
 void
 usertrap(void)
 {
@@ -43,49 +43,55 @@ usertrap(void)
 
   // send interrupts and exceptions to kerneltrap(),
   // since we're now in the kernel.
-  w_stvec((uint64)kernelvec);
+  w_stvec((uint64)kernelvec);//他首先改变stvec（内核在这里写入其陷阱处理程序的地址），这样内核中的陷阱将有kernelvec来处理
 
   struct proc *p = myproc();
   
   // save user program counter.
-  p->trapframe->epc = r_sepc();
+  p->trapframe->epc = r_sepc();//保存sepc（保存用户的的pc程序技术其），再次保存是因为usertrap可能会有一个进程切换，怕sepc被覆盖
   
   if(r_scause() == 8){
     // system call
+    //如果是陷阱的原因是系统调用
 
     if(killed(p))
       exit(-1);
 
     // sepc points to the ecall instruction,
     // but we want to return to the next instruction.
-    p->trapframe->epc += 4;
+    p->trapframe->epc += 4;//+4是因为在系统调用的情况下，risc-v会留下指向ecall指令的程序指针，返回后需要执行ecall的下一条指令，
 
     // an interrupt will change sepc, scause, and sstatus,
     // so enable only now that we're done with those registers.
-    intr_on();
+    intr_on();//允许设备中断
 
-    syscall();
+    syscall();//执行系统调用
   } else if((which_dev = devintr()) != 0){
     // ok
+    //设备中断，这里会处理
+
   } else {
+    //否则就是一个异常了，内核会杀杀死错误的进程
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     setkilled(p);
   }
-
+  //退出时，usertrap需要检查进程是已经杀死了还是应该要让出CPU
   if(killed(p))
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
+  //如果这个陷阱是计时器中断
   if(which_dev == 2)
     yield();
-
+  
+  //返回用户空间的第一部就是调用这个函数，
   usertrapret();
 }
 
 //
 // return to user space
-//
+//该函数设置risc-v控制寄存器，为将来来自用户空间的陷阱作准备
 void
 usertrapret(void)
 {
@@ -126,7 +132,9 @@ usertrapret(void)
   // switches to the user page table, restores user registers,
   // and switches to user mode with sret.
   uint64 trampoline_userret = TRAMPOLINE + (userret - trampoline);
-  ((void (*)(uint64))trampoline_userret)(satp);
+  ((void (*)(uint64))trampoline_userret)(satp);//调用userret，
+  // userytrap在用户和内核页标中都映射的蹦床页面上调用userret，userret中的汇编代码会切换页表，
+
 }
 
 // interrupts and exceptions from kernel code go here via kernelvec,

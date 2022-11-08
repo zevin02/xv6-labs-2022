@@ -22,7 +22,7 @@ fetchaddr(uint64 addr, uint64 *ip)
 // Fetch the nul-terminated string at addr from the current process.
 // Returns length of string, not including nul, or -1 for error.
 int
-fetchstr(uint64 addr, char *buf, int max)
+fetchstr(uint64 addr, char *buf, int max)//内核实现了安全的将数据传输到用户提供的地址和从用户提供的地址传输数据的功能
 {
   struct proc *p = myproc();
   if(copyinstr(p->pagetable, buf, addr, max) < 0)
@@ -31,9 +31,10 @@ fetchstr(uint64 addr, char *buf, int max)
 }
 
 static uint64
-argraw(int n)
+argraw(int n)//调用这个来检索系统调用的参数，参数都会放在陷阱帧里面，
 {
   struct proc *p = myproc();
+  //里面有7个参数可能，就是因为risc-v里面有7个保存参数调用的寄存器
   switch (n) {
   case 0:
     return p->trapframe->a0;
@@ -134,11 +135,11 @@ syscall(void)
   int num;
   struct proc *p = myproc();
 
-  num = p->trapframe->a7;
+  num = p->trapframe->a7;//从陷阱帧a7里面检索系统调用号
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
     // Use num to lookup the system call function for num, call it,
     // and store its return value in p->trapframe->a0
-    p->trapframe->a0 = syscalls[num]();
+    p->trapframe->a0 = syscalls[num]();//返回的时候把返回值放到陷阱帧的a0里面
   } else {
     printf("%d %s: unknown sys call %d\n",
             p->pid, p->name, num);

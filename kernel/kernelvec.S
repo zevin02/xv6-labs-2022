@@ -9,9 +9,11 @@
 .globl kerneltrap
 .globl kernelvec
 .align 4
+        # xv6根据执行的是用户代码还是内核代码，对CPU陷阱寄存器的配置有所不同，在执行内核代码的时候，将stvec指向kernelvec的汇编代码里面
 kernelvec:
+        # 
         # make room to save registers.
-        addi sp, sp, -256
+        addi sp, sp, -256       # 压栈
 
         # save the registers.
         sd ra, 0(sp)

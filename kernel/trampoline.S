@@ -28,7 +28,16 @@ uservec:
 
         # save user a0 in sscratch so
         # a0 can be used to get at TRAPFRAME.
+        # 1.
+        # 这里的uservec启动的时候，所有的32个寄存器都包含了中断代码所拥有的值，但是uservec需要能够修改一些寄存器的值
+        # 能够设置satp并生成保存寄存器的值，
+        
+        # ssratch：内核在这里设置了一个值，在陷阱处理程序的一开始就会派上用场
+        # csrw交换了sscratch和a0的值，用户代码发送的参数a0就被保存在ssratch里面了
+        # uservec有一个寄存器可以使用了（a0）
+        # a0保存sratch以前的值
         csrw sscratch, a0
+        # 在交换a0和sscratch之后，a0现在持有当前进程陷阱帧的指针，uservec保存那里的所有用户寄存器，包括从sscratch读取的用户a0
 
         # each process has a separate p->trapframe memory area,
         # but it's mapped to the same virtual address
@@ -36,6 +45,8 @@ uservec:
         li a0, TRAPFRAME
         
         # save the user registers in TRAPFRAME
+        # 2.
+        # 保存用户寄存器，
         sd ra, 40(a0)
         sd sp, 48(a0)
         sd gp, 56(a0)
@@ -99,6 +110,7 @@ uservec:
 
 .globl userret
 userret:
+        # 代码从内核返回到用户空间
         # userret(pagetable)
         # called by usertrapret() in trap.c to
         # switch from kernel to user.
