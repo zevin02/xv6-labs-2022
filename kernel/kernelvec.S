@@ -10,6 +10,7 @@
 .globl kernelvec
 .align 4
         # xv6根据执行的是用户代码还是内核代码，对CPU陷阱寄存器的配置有所不同，在执行内核代码的时候，将stvec指向kernelvec的汇编代码里面
+        # kernelvec将寄存器保存在被中断的内核线程的栈上，因为寄存器值是属于该线程的，如果trap导致切换到不同的线程，将被中断的线程保存到栈上，类似于将ra保存在栈上
 kernelvec:
         # 
         # make room to save registers.

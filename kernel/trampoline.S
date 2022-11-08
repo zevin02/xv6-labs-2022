@@ -108,6 +108,7 @@ uservec:
         # jump to usertrap(), which does not return
         jr t0
 
+# 最后的返回用户空间，后回到ecall进行恢复
 .globl userret
 userret:
         # 代码从内核返回到用户空间
