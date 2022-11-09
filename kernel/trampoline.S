@@ -25,7 +25,7 @@ uservec:
         # traps from user space start here,
         # in supervisor mode, but with a
         # user page table.
-        #
+        # 因为这里的kernel 和user都是映射到同一个地址的
 
         # save user a0 in sscratch so
         # a0 can be used to get at TRAPFRAME.
@@ -122,6 +122,7 @@ uservec:
         # install the kernel page table.
         # 交换satp和t1的值，执行完这些之后，就从user page table转移到了kernel page table
         # satp里面的就是可以指向内核页表
+        # t1里面指向的就是kernel_satp里面的内容，这个值是一开始就帮我们设置好的了，我们现在把这个值给了t1,在给satp，之后satp就指向了内核页表了
         csrw satp, t1
 
         # 走到这里我们发现代码没有崩溃，pc里面保存vm，我们这里切换了page table，为什么同一个虚拟地址不会走到一些无关的page中
@@ -145,12 +146,19 @@ userret:
 
         # switch to the user page table.
         sfence.vma zero, zero
+        # 在执行这个之前 page table还是一个kernel page table
+        # 在usertrap.c里面作为参数传到这里，satp用户页表
         csrw satp, a0
-        sfence.vma zero, zero
+        # 他也映射在trampoline page里面，所以程序还能执行而不会崩溃
 
+        # 这里是清空页表缓存
+
+        sfence.vma zero, zero
+        # 这里直接把trapframe帧赋值给a0,下面就能访问里面东西了
         li a0, TRAPFRAME
 
         # restore all but a0 from TRAPFRAME
+        # 这里的所有寄存器都还是属于内核
         ld ra, 40(a0)
         ld sp, 48(a0)
         ld gp, 56(a0)
@@ -183,12 +191,12 @@ userret:
         ld t6, 280(a0)
 
 	# restore user a0
-        
+        # 上面都恢复完了，再恢复a0，trapframe中的a0就是我们执行系统调用的返回值
         ld a0, 112(a0)
         
         # 返回时候，恢复所有的用户寄存器
         # 恢复之后ssratch里面保存trapoline的值，a0里面也恢复成之前的值了
-
+        # 之后就恢复到ecall之前的所有寄存器的值了
         # return to user mode and user pc.
         # usertrapret() set up sstatus and sepc.
         # 返回到用户空间里面

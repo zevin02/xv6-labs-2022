@@ -32,7 +32,7 @@ trapinithart(void)
 //
 // handle an interrupt, exception, or system call from user space.
 // called from trampoline.S
-//usertrap任务是确认陷阱的原因，处理之后并返回，
+// usertrap任务是确认陷阱的原因，处理之后并返回，
 void
 usertrap(void)
 {
@@ -44,26 +44,31 @@ usertrap(void)
   // send interrupts and exceptions to kerneltrap(),
   // since we're now in the kernel.
   w_stvec((uint64)kernelvec);//他首先改变stvec（内核在这里写入其陷阱处理程序的地址），这样内核中的陷阱将有kernelvec来处理
+  // 他做的第一件事就是更改stvec寄存器，取决于trap来自用户空间还是内核空间，在内核执行开始之前，usertrap先将stvec指向kernelvec
+  // 这是内核处理trap代码的地方，而不是用户空间处理代码的位置
 
-  struct proc *p = myproc();
-  
+  struct proc *p = myproc();//我们需要知道我们现在在运行什么进程，这个函数实际会查找当前CPU核的编号索引的数组，CPU核的编号是hartid
+  //我们已经把这个值存在了tp寄存器
   // save user program counter.
-  p->trapframe->epc = r_sepc();//保存sepc（保存用户的的pc程序技术其），再次保存是因为usertrap可能会有一个进程切换，怕sepc被覆盖
-  
+  p->trapframe->epc = r_sepc();//保存sepc（保存用户的的pc程序计数器），再次保存是因为usertrap可能会有一个进程切换，怕sepc被覆盖
+  //sepc始终保存的就是pc，但是可能程序在运行的时候，切换进程，进入那个程序的用户空间，然后那个进程可能再次调用系统调用导致sepc被覆盖
+  //所以我们需要保存当前进程的sepc，到和该进程相关内存里面，
+  //查找trap原因
   if(r_scause() == 8){
     // system call
     //如果是陷阱的原因是系统调用
 
-    if(killed(p))
+    if(killed(p))//如果这个进程已经被杀死了，就不要处理
       exit(-1);
 
     // sepc points to the ecall instruction,
     // but we want to return to the next instruction.
-    p->trapframe->epc += 4;//+4是因为在系统调用的情况下，risc-v会留下指向ecall指令的程序指针，返回后需要执行ecall的下一条指令，
+    p->trapframe->epc += 4;//因为epc里面指向的ecall的指令地址，+4是因为在系统调用的情况下，risc-v会留下指向ecall指令的程序指针，返回后需要执行ecall的下一条指令，
 
     // an interrupt will change sepc, scause, and sstatus,
     // so enable only now that we're done with those registers.
-    intr_on();//允许设备中断
+    intr_on();//允许设备中断，xv6在处理系统调用的时候才会中断，这样中断效率高，但是有些系统调用处理时间长，中断总是会被trap的硬件关闭
+    //所以我们需要显示的打开中断
 
     syscall();//执行系统调用
   } else if((which_dev = devintr()) != 0){
@@ -77,6 +82,7 @@ usertrap(void)
     setkilled(p);
   }
   //退出时，usertrap需要检查进程是已经杀死了还是应该要让出CPU
+  //因为我们不想恢复一个被杀掉的进程，因为可能在系统调用执行的时候程序就已经崩了，就没必要再执行这个程序了
   if(killed(p))
     exit(-1);
 
@@ -100,14 +106,19 @@ usertrapret(void)
   // we're about to switch the destination of traps from
   // kerneltrap() to usertrap(), so turn off interrupts until
   // we're back in user space, where usertrap() is correct.
-  intr_off();
+  intr_off();//关闭了中断，因为我们在系统调用的时候是把中断打开的
+  //这里关闭中断因为我们要更新stvec来指向用户空间的trap代码
+  //这时我们仍然在内核执行代码。如果这时发生了一个中断，那么程序就会走到用户空间的trap代码，即使我们还在内核中
 
   // send syscalls, interrupts, and exceptions to uservec in trampoline.S
-  uint64 trampoline_uservec = TRAMPOLINE + (uservec - trampoline);
-  w_stvec(trampoline_uservec);
+  uint64 trampoline_uservec = TRAMPOLINE + (uservec - trampoline); 
+  w_stvec(trampoline_uservec);//这里我们设置了stvec指向trampoline代码，在那里会执行sret返回到用户空间
+  //所以在我们执行代码的时候中断总是开始的
+
 
   // set up trapframe values that uservec will need when
   // the process next traps into the kernel.
+  //下面填入了trapframe的内容
   p->trapframe->kernel_satp = r_satp();         // kernel page table
   p->trapframe->kernel_sp = p->kstack + PGSIZE; // process's kernel stack
   p->trapframe->kernel_trap = (uint64)usertrap;
@@ -117,21 +128,31 @@ usertrapret(void)
   // to get to user space.
   
   // set S Previous Privilege mode to User.
+
+  //sstatus寄存器，这是一个控制寄存器，其中的SIE位控制设备中断是否启用，如果内核清空SIE，risc-v就会推迟设备中断，直到内核重新设置SIE
+  //SPP indicate that whether trap come frome user mode or supervisor mode
+  //SPP bit =0 means sret :return to user mode instead of s mode
+  // SPIE bit control that after execuate the sret instruction whether or not open the interrupt
+
   unsigned long x = r_sstatus();
+  //modify the value
   x &= ~SSTATUS_SPP; // clear SPP to 0 for user mode
-  x |= SSTATUS_SPIE; // enable interrupts in user mode
-  w_sstatus(x);
+  x |= SSTATUS_SPIE; // enable interrupts in user mode,1 means open
+  //having modified the args of the sstatus
+  w_sstatus(x);//rewrite the  new value to sstatus
 
   // set S Exception Program Counter to the saved user pc.
-  w_sepc(p->trapframe->epc);
+  // restore to the previous pc
+  w_sepc(p->trapframe->epc);//sepc store the user addr when trap to kernel
 
   // tell trampoline.S the user page table to switch to.
+  // make satp base on user page table addr,然后我们会在返回到用户空间的时候完成页表的切换
   uint64 satp = MAKE_SATP(p->pagetable);
 
   // jump to userret in trampoline.S at the top of memory, which 
   // switches to the user page table, restores user registers,
   // and switches to user mode with sret.
-  uint64 trampoline_userret = TRAMPOLINE + (userret - trampoline);//
+  uint64 trampoline_userret = TRAMPOLINE + (userret - trampoline);//计算出我们要跳转到的汇编代码的地址我们希望跳转的是userret
   ((void (*)(uint64))trampoline_userret)(satp);//调用userret，在这里调用函数，这里无论调用什么参数，这里都是trapframe和用户页表，这里的第一个参数就进入到a0里面
   // userytrap在用户和内核页标中都映射的蹦床页面上调用userret，userret中的汇编代码会切换页表，
 
