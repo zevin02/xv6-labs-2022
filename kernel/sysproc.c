@@ -65,6 +65,7 @@ sys_sleep(void)
       return -1;
     }
     sleep(&ticks, &tickslock);
+    backtrace();
   }
   release(&tickslock);
   return 0;
@@ -74,7 +75,7 @@ uint64
 sys_kill(void)
 {
   int pid;
-
+   
   argint(0, &pid);
   return kill(pid);
 }
