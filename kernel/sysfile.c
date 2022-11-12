@@ -503,3 +503,25 @@ sys_pipe(void)
   }
   return 0;
 }
+uint64 sys_sigreturn(void)
+{
+  return 0;
+}
+
+uint64 sys_sigalarm(void)
+{
+  int interval;
+  argint(0,&interval);
+  uint64 handlerptr;
+  argaddr(1,&handlerptr);
+  struct proc* p=myproc();
+  p->interval=interval;
+  p->handlerptr=handlerptr;
+  p->tonextcall++;
+  if(p->tonextcall==p->interval)
+  {
+    //当中断次数达到了时间间隔，就触发函数
+    p->tonextcall=0;
+  }
+  return 0;
+}

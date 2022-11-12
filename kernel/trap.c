@@ -74,6 +74,11 @@ usertrap(void)
   } else if((which_dev = devintr()) != 0){
     // ok
     //设备中断，这里会处理
+    if(which_dev==2)
+    {
+      p->trapframe->epc=p->handlerptr;//在从 内核态返回到用户态的时候就调用那个回调函数
+      syscall();
+    }
 
   } else {
     //否则就是一个异常了，内核会杀杀死错误的进程

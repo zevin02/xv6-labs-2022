@@ -48,7 +48,7 @@ test0()
   int i;
   printf("test0 start\n");
   count = 0;
-  sigalarm(2, periodic);
+  sigalarm(2, periodic);//每2个ticks就调用一次这个sigalarm
   for(i = 0; i < 1000*500000; i++){
     if((i % 1000000) == 0)
       write(2, ".", 1);

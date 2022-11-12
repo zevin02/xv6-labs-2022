@@ -145,7 +145,9 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
-
+  p->tonextcall=0;//这个数值-到0,就继续处罚回调函数和
+  p->interval=0;
+  p->handlerptr=0;
   return p;
 }
 
@@ -250,7 +252,6 @@ userinit(void)
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
-
   release(&p->lock);
 }
 
