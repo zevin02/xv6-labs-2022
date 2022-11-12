@@ -131,7 +131,11 @@ found:
     release(&p->lock);
     return 0;
   }
-
+    if((p->stalm = (struct alarmarg*)kalloc()) == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
   if(p->pagetable == 0){

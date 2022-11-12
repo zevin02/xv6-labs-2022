@@ -16,6 +16,45 @@ void kernelvec();
 
 extern int devintr();
 
+
+
+void store_register()//保存用户的集村区
+{
+  struct proc* p=myproc();
+  p->stalm->ra=p->trapframe->ra;
+  p->stalm->sp=p->trapframe->sp;
+  p->stalm->gp=p->trapframe->gp;
+  p->stalm->tp=p->trapframe->tp;
+  p->stalm->t0=p->trapframe->t0;
+  p->stalm->t1=p->trapframe->t1;
+  p->stalm->t2=p->trapframe->t2;
+  p->stalm->s0=p->trapframe->s0;
+  p->stalm->s1=p->trapframe->s1;
+  p->stalm->a0=p->trapframe->a0;
+  p->stalm->a1=p->trapframe->a1;
+  p->stalm->a2=p->trapframe->a2;
+  p->stalm->a3=p->trapframe->a3;
+  p->stalm->a4=p->trapframe->a4;
+  p->stalm->a5=p->trapframe->a5;
+  p->stalm->a6=p->trapframe->a6;
+  p->stalm->a7=p->trapframe->a7;
+  p->stalm->s2=p->trapframe->s2;
+  p->stalm->s3=p->trapframe->s3;
+  p->stalm->s4=p->trapframe->s4;
+  p->stalm->s5=p->trapframe->s5;
+  p->stalm->s6=p->trapframe->s6;
+  p->stalm->s7=p->trapframe->s7;
+  p->stalm->s8=p->trapframe->s8;
+  p->stalm->s9=p->trapframe->s9;
+  p->stalm->s10=p->trapframe->s10;
+  p->stalm->s11=p->trapframe->s11;
+  p->stalm->t3=p->trapframe->t3;
+  p->stalm->t4=p->trapframe->t4;
+  p->stalm->t5=p->trapframe->t5;
+  p->stalm->t6=p->trapframe->t6;
+
+}
+
 void
 trapinit(void)
 {
@@ -76,9 +115,12 @@ usertrap(void)
     //设备中断，这里会处理
     if(which_dev==2)
     {
+      p->lastepc=p->trapframe->epc;
+      store_register();
       p->trapframe->epc=p->handlerptr;//在从 内核态返回到用户态的时候就调用那个回调函数
       syscall();
     }
+
 
   } else {
     //否则就是一个异常了，内核会杀杀死错误的进程
