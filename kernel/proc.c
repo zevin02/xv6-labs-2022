@@ -131,7 +131,7 @@ found:
     release(&p->lock);
     return 0;
   }
-    if((p->stalm = (struct alarmarg*)kalloc()) == 0){
+    if((p->stalm = (struct alarmarg*)kalloc()) == 0){//分配完页表空间之后才能够使用这些参数
     freeproc(p);
     release(&p->lock);
     return 0;
@@ -152,6 +152,7 @@ found:
   p->tonextcall=0;//这个数值-到0,就继续处罚回调函数和
   p->interval=0;
   p->handlerptr=0;
+  p->on_alarm=0;
   return p;
 }
 
@@ -164,6 +165,9 @@ freeproc(struct proc *p)
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
+  if(p->stalm)
+    kfree((void*)p->stalm);
+  p->stalm = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;

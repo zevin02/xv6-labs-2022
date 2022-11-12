@@ -147,4 +147,5 @@ struct proc {
   int tonextcall;//距离上一次调用隔了多长时间,
   struct alarmarg* stalm;
   uint64 lastepc;
+  int on_alarm;
 };
