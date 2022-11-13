@@ -168,7 +168,7 @@ void syscall(void)
   int num;
   struct proc *p = myproc();
 
-  num = p->trapframe->a7; // num里面存放的数字就是要调用的系统调用对应的数字,可能会有多个
+  num = p->trapframe->a7; // num里面存放的数字就是要调用的系统调用对应的数字,可能会有多个,0x00000000800020b0
   // num = * (int *) 0;
   if (num > 0 && num < NELEM(syscalls) && syscalls[num])
   {
