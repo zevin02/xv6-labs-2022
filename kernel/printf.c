@@ -142,11 +142,11 @@ void backtrace()
   printf("backtrace:\n");
   uint64 fp = r_fp(); //把帧指针保存在这个的s0寄存器里面
 
-  while (PGROUNDUP(fp)-PGROUNDDOWN(fp)==PGSIZE)//因为都映射在一个page大小里面，所以如果不等于就一定是错的
+  while (fp<PGROUNDUP(fp))//超出这个范围内的肯定是错的
   {
  
     uint64 addr = *(uint64*)(fp - 8);//栈帧的地地址
     printf("%p\n", addr);//这个最高的就是最终的函数调用位置
-    fp=*(uint64*)(fp-16);//返回到上一个地址，进行循环迭代
+    fp=*(uint64*)(fp-16);//返回到上一个地址，进行循环迭代，到最后肯定就超了，就结束了
   }
 }
