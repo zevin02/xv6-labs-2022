@@ -181,7 +181,7 @@ test3()
   printf("test3 start\n");
 
   asm volatile("lui a5, 0");
-  asm volatile("addi a0, a5, 0xac" : : : "a0");
+  asm volatile("addi a0, a5, 0xac" : : : "a0");//这里把返回值给到a0,我们这里设置的寄存器变量
   for(int i = 0; i < 500000000; i++)
     ;
   asm volatile("mv %0, a0" : "=r" (a0) );

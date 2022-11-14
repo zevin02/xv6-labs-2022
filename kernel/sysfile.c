@@ -545,7 +545,7 @@ uint64 sys_sigreturn(void)
   p->trapframe->epc=p->lastepc;
   restore_register();
   p->on_alarm=0;
-  return 0;
+  return p->trapframe->a0;//值保存再a0里面
 }
 
 uint64 sys_sigalarm(void)

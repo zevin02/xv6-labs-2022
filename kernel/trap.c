@@ -116,7 +116,7 @@ void usertrap(void)
       {
         p->lastepc = p->trapframe->epc;
         store_register();
-        p->on_alarm=1;
+        p->on_alarm=1;//正在处理，就把这个设置这个标志位
         p->trapframe->epc = p->handlerptr; //在从 内核态返回到用户态的时候就调用那个回调函数
         syscall();
       }
