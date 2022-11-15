@@ -29,6 +29,8 @@ kvmmake(void)
 
   // uart registers
   //将这些IO设备映射到内核
+  //这个设备映射到页表的0号条目下，或者我们会将用户页面映射到底部,因为他们的内核虚拟地址一般都很低0x2,所以都映射到了0号条目，所以我们直接对这个页表进行操作就行了
+  //页表的地址就是0号条目，
   kvmmap(kpgtbl, UART0, UART0, PGSIZE, PTE_R | PTE_W);
 
   // virtio mmio disk interface
@@ -48,6 +50,7 @@ kvmmake(void)
   kvmmap(kpgtbl, TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
 
   // allocate and map a kernel stack for each process.
+  // 把这些设备添加到每个进程的内核页标里面
   proc_mapstacks(kpgtbl);
 
   return kpgtbl;
@@ -74,7 +77,7 @@ void kvminithart() //安装内核页表，将根页表页中的虚拟地址写�
 }
 
 // Return the address of the PTE in page table pagetable
-// that corresponds to virtual address va.  If alloc!=0,
+// that corresponds to virtual address va.  If alloc!=0
 // create any required page-table pages.
 //
 // The risc-v Sv39 scheme has three levels of page-table
@@ -85,8 +88,9 @@ void kvminithart() //安装内核页表，将根页表页中的虚拟地址写�
 //   21..29 -- 9 bits of level-1 index.
 //   12..20 -- 9 bits of level-0 index.
 //    0..11 -- 12 bits of byte offset within the page.
+//如果要将用户程序在内核中也能被使用，只要将用va映射到内核的va上，这样我们就能使用这些数据了，找到用户的地址
 pte_t *
-walk(pagetable_t pagetable, uint64 va, int alloc) //为虚拟地址找PTE
+walk(pagetable_t pagetable, uint64 va, int alloc) //为虚拟地址找PTE,这里的alloc，我们一般就带上1,如果需要的话，就会分配中间页
 {
   if (va >= MAXVA)
     panic("walk");
@@ -103,8 +107,8 @@ walk(pagetable_t pagetable, uint64 va, int alloc) //为虚拟地址找PTE
     {
       if (!alloc || (pagetable = (pde_t *)kalloc()) == 0)
         return 0;
-      memset(pagetable, 0, PGSIZE);
-      *pte = PA2PTE(pagetable) | PTE_V;
+      memset(pagetable, 0, PGSIZE);//一个页表一共就只有4096个字节大小
+      *pte = PA2PTE(pagetable) | PTE_V;//添加v标志位
     }
   }
   return &pagetable[PX(0, va)]; //返回的一定是最低一级的PTE
@@ -204,6 +208,7 @@ void uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
 
 // create an empty user page table.
 // returns 0 if out of memory.
+//创建一个空的用户页表，创建出来的都是顶级页表
 pagetable_t
 uvmcreate()
 {
@@ -499,7 +504,7 @@ void vmprint(pagetable_t pagetable)
 {
 
   printf("page table %p\n", pagetable);
-  _vmprint(pagetable, 1);
+  _vmprint(pagetable, 1); 
 }
 
 int pgaccess(pagetable_t pagetable, uint64 va)
@@ -508,7 +513,8 @@ int pgaccess(pagetable_t pagetable, uint64 va)
   {
     return 0;
   }
-  pte_t *pte = walk(pagetable, va, 0);//walk获得最终的pte，pte的后10位是标志位，44位是ppn
+  pte_t *pte = walk(pagetable, va, 1);//walk获得最终的pte，pte的后10位是标志位，44位是ppn
+  //这里使用1是因为如果为1的话，假如有中间页缺失，就会创建出来中间页
   if(pte==0)
   {
     return 0;

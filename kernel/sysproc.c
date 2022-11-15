@@ -88,7 +88,7 @@ int sys_pgaccess(void)
   // walk()，遍历，查看谁被使用了
   for (int i = 0; i < len; i++)
   {
-    if (pgaccess(p->pagetable, base + i * PGSIZE)) //返回为真，这个标志位可以
+    if (pgaccess(p->pagetable, base + i * PGSIZE)) //返回为真，这个标志位可以，因为都在一个用户的进程地址空间上面
     {
       n |= (1 << i);//如果该标志位为真，
     }

@@ -364,4 +364,6 @@ typedef uint64 *pagetable_t; // 512 PTEs    他本质上就是指向根页表页
 // MAXVA is actually one bit less than the max allowed by
 // Sv39, to avoid having to sign-extend virtual addresses
 // that have the high bit set.
-#define MAXVA (1L << (9 + 9 + 9 + 12 - 1))
+#define MAXVA (1L << (9 + 9 + 9 + 12 - 1))//这个地方往左移动了38位，代表了这里的maxva实际上是有39位的
+//risc-v给我们提供的是39位寻址，但是再xv6里面我们只是用38位进行寻址，条目就直接减半了，原来是512,现在就变成256,
+//虚拟地址的最大值

@@ -137,7 +137,7 @@ found:
   {
     freeproc(p);
     release(&p->lock);
-    return 0;
+    return 0; 
   }
   if ((p->labpid = (struct usyscall *)kalloc()) == 0) //开辟一块内存空间给p->labpid
   {
@@ -200,7 +200,7 @@ proc_pagetable(struct proc *p)
   pagetable_t pagetable;
 
   // An empty page table.
-  pagetable = uvmcreate();
+  pagetable = uvmcreate();//我们获取之后，将他的内容从kernel page table里面拷贝一些过来511个条目
   if (pagetable == 0)
     return 0;
 
@@ -208,6 +208,7 @@ proc_pagetable(struct proc *p)
   // at the highest user virtual address.
   // only the supervisor uses it, on the way
   // to/from user space, so not PTE_U.
+  
   if (mappages(pagetable, TRAMPOLINE, PGSIZE,
                (uint64)trampoline, PTE_R | PTE_X) < 0)
   {
