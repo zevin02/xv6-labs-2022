@@ -36,7 +36,8 @@ sys_wait(void)
 }
 
 uint64
-sys_sbrk(void)
+sys_sbrk(void)//在man手册中，sbrk里面的参数就是要增加（减少）的字节数，他可以扩大stack
+//这意味着调用他时，内核会自动分配需要的物理空间，会浪费
 {
   uint64 addr;
   int n;

@@ -302,8 +302,11 @@ uvmfree(pagetable_t pagetable, uint64 sz)
 // physical memory.
 // returns 0 on success, -1 on failure.
 // frees any allocated pages on failure.
+//父子进程拷贝页表还有物理内存，使得子进程能够有和父进程相同的内容
+//这样效率会很高，但是如果只这样的话，会导致父子通过对共享堆栈的写入来中断彼此的执行
+
 int
-uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
+uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)//将两个pagetable进行复制，两个不同的进程虚拟地址相同映射到页表的相同位置
 {
   pte_t *pte;
   uint64 pa, i;

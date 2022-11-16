@@ -256,6 +256,7 @@ userinit(void)
 
 // Grow or shrink user memory by n bytes.
 // Return 0 on success, -1 on failure.
+// 增长或减少用户内存的大小（n字节）
 int
 growproc(int n)
 {
