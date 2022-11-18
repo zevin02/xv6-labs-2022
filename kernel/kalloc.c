@@ -129,6 +129,8 @@ int cowalloc(pagetable_t pagetable, uint64 va)
     return 0;
   //这个函数就是用来进行分配物理空间的
   uint64 pa = PTE2PA(*pte);
+    if (((uint64)pa % PGSIZE) != 0 || (char *)pa < end || (uint64)pa >= PHYSTOP)
+    panic("cowalloc");
   uint64 ka = (uint64)kalloc();
   if (ka == 0)
   {
@@ -148,6 +150,8 @@ int cowalloc(pagetable_t pagetable, uint64 va)
 
 void refadd(uint64 pa)
 {
+    if (((uint64)pa % PGSIZE) != 0 || (char *)pa < end || (uint64)pa >= PHYSTOP)
+    panic("refadd");
   acquire(&ref.lock);
   ref.refcnt[pa / PGSIZE]++;
   release(&ref.lock);
