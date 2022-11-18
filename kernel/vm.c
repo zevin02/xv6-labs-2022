@@ -155,7 +155,7 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
       return -1;
     if(*pte & PTE_V)
       panic("mappages: remap");
-    *pte = PA2PTE(pa) | perm | PTE_V;
+    *pte = PA2PTE(pa) | perm | PTE_V;//构建一个新的pte映射
     if(a == last)
       break;
     a += PGSIZE;
@@ -168,7 +168,7 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
 // page-aligned. The mappings must exist.
 // Optionally free the physical memory.
 void
-uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
+uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)//取消映射
 {
   uint64 a;
   pte_t *pte;
@@ -318,8 +318,8 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)//将两个pagetable进行�
       panic("uvmcopy: pte should exist");
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
-    *pte&=(~PTE_W);
-    *pte|=PTE_COW;
+    *pte&=(~PTE_W);//把w权限给取消掉
+    *pte|=PTE_COW;//设置为cow页
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
     // if((mem = kalloc()) == 0)
@@ -327,11 +327,14 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)//将两个pagetable进行�
     // memmove(mem, (char*)pa, PGSIZE);
 
     if(mappages(new, i, PGSIZE, pa, flags) != 0){
-      // kfree(mem);
+       kfree((void*)pa);
 
       goto err;
     }
-    refadd(pa);
+    else
+    {
+      refadd(pa);
+    }
   }
   return 0;
 

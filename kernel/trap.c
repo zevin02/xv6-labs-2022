@@ -71,10 +71,10 @@ usertrap(void)
   else if(r_scause()==15||r_scause()==13)
   {
     uint64 va=r_stval();//获得错误的虚拟地址
-    va=PGROUNDDOWN(va);
-    if(iscow(p->pagetable,va))
+    va=PGROUNDDOWN(va);//16进制向下取整
+    if(iscow(p->pagetable,va))//是因为cow引起的page fault
     {
-      if(cowalloc(p->pagetable,va)==0)
+      if(cowalloc(p->pagetable,va)==0)//为新的页表分配内存
       {
         p->killed=1;
       }
