@@ -142,25 +142,25 @@ int cowalloc(pagetable_t pagetable, uint64 va)//为page fault的虚拟地址进�
   memmove((void *)ka, (void *)pa, PGSIZE);//把他原来对应物理内存的地址进行拷贝过来，都是4096字节
   *pte &= (~PTE_COW);//取消他的cow标志位
   *pte |= PTE_W;//添加写权限
-  // *pte&=(~PTE_V);
+  // *pte|=(PTE_V);
   uint flag = PTE_FLAGS(*pte);
   uvmunmap(pagetable, va, 1, 1);//这个地方因为是取消映射，也就是之前映射对应的物理地址对应的引用计数要减1
   if (mappages(pagetable, va, PGSIZE, ka, flag) != 0)//进行新的映射
   {
     //映射失败，同时页需要减少引用计数
     kfree((void*)ka);
-    // *pte&=PTE_V;
+    // *pte&=(~PTE_V);//添加这个有效的标志位
     uvmunmap(pagetable,va,1,1);
     return 0;
   }
   return 1;
 }
 
-void refadd(uint64 pa)
+void refadd(uint64 pa)//添加引用计数
 {
   if (((uint64)pa % PGSIZE) != 0 || (char *)pa < end || (uint64)pa >= PHYSTOP)
     panic("refadd");
-  acquire(&ref.lock);
+  acquire(&ref.lock);//添加的时候要上锁，避免出现多线程同时操作同一个数的情况 
   ref.refcnt[pa / PGSIZE]++;
   release(&ref.lock);
 }
