@@ -7,11 +7,13 @@
 volatile static int started = 0;
 
 // start() jumps here in supervisor mode on all CPUs.
+// 看main函数里面是怎么处理这些外部中断的
+
 void
 main()
 {
   if(cpuid() == 0){
-    consoleinit();
+    consoleinit();//我们第一个外设就是console，
     printfinit();
     printf("\n");
     printf("xv6 kernel is booting\n");

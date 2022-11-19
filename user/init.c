@@ -17,10 +17,10 @@ main(void)
   int pid, wpid;
 
   if(open("console", O_RDWR) < 0){
-    mknod("console", CONSOLE, 0);
+    mknod("console", CONSOLE, 0);//这里通过mknod来创建了一个console设备，因为这是第一个打开的设备，所以fd=0,
     open("console", O_RDWR);
   }
-  dup(0);  // stdout
+  dup(0);  // stdout，通过dup来创建stdout和stderr，通过复制文件描述符0,得到了另外两个文件描述符1,2,所以文件描述符0,1,2都用来代表console
   dup(0);  // stderr
 
   for(;;){

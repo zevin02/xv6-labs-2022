@@ -19,7 +19,7 @@
 // some have different meanings for
 // read vs write.
 // see http://byterunner.com/16550.html
-#define RHR 0                 // receive holding register (for input bytes)
+#define RHR 0                 // receive holding register (for input bytes)，这下面的这些字符如果有的话，可以从这个RHR寄存器读取
 #define THR 0                 // transmit holding register (for output bytes)
 #define IER 1                 // interrupt enable register
 #define IER_RX_ENABLE (1<<0)
@@ -31,30 +31,33 @@
 #define LCR 3                 // line control register
 #define LCR_EIGHT_BITS (3<<0)
 #define LCR_BAUD_LATCH (1<<7) // special mode to set baud rate
-#define LSR 5                 // line status register
+#define LSR 5                 // line status register,指示输入的字符是否正在等待软件读取的位
 #define LSR_RX_READY (1<<0)   // input is waiting to be read from RHR
 #define LSR_TX_IDLE (1<<5)    // THR can accept another character to send
 
-#define ReadReg(reg) (*(Reg(reg)))
-#define WriteReg(reg, v) (*(Reg(reg)) = (v))
+#define ReadReg(reg) (*(Reg(reg)))  //  
+#define WriteReg(reg, v) (*(Reg(reg)) = (v))  
 
 // the transmit output buffer.
 struct spinlock uart_tx_lock;
 #define UART_TX_BUF_SIZE 32
 char uart_tx_buf[UART_TX_BUF_SIZE];
-uint64 uart_tx_w; // write next to uart_tx_buf[uart_tx_w % UART_TX_BUF_SIZE]
-uint64 uart_tx_r; // read next from uart_tx_buf[uart_tx_r % UART_TX_BUF_SIZE]
+uint64 uart_tx_w; // write next to uart_tx_buf[uart_tx_w % UART_TX_BUF_SIZE]，为consumer提供的读指针
+uint64 uart_tx_r; // read next from uart_tx_buf[uart_tx_r % UART_TX_BUF_SIZE]，为producer提供的写指针,来构建一个环形buffer队列
 
 extern volatile int panicked; // from printf.c
 
 void uartstart();
 
 void
-uartinit(void)
+uartinit(void)//这个函数实际上就是配置好了UART芯片，使其能够使用
 {
+  
   // disable interrupts.
+  // 关闭中断
   WriteReg(IER, 0x00);
 
+  //设置波特率（串口线的传输速率）
   // special mode to set baud rate.
   WriteReg(LCR, LCR_BAUD_LATCH);
 
@@ -66,15 +69,19 @@ uartinit(void)
 
   // leave set-baud mode,
   // and set word length to 8 bits, no parity.
+  // 设置字符长度为8
   WriteReg(LCR, LCR_EIGHT_BITS);
 
   // reset and enable FIFOs.
+  //重置FIFO
   WriteReg(FCR, FCR_FIFO_ENABLE | FCR_FIFO_CLEAR);
 
   // enable transmit and receive interrupts.
+  //再打开中断，IER就是用来打开中断的寄存器,关于IER的所有的寄存器操作都打开
   WriteReg(IER, IER_TX_ENABLE | IER_RX_ENABLE);
 
   initlock(&uart_tx_lock, "uart");
+  // 运行完这个uarinit函数之后，原则上UART就可以产生中断了，但是因为我们没有对PLIC编程，所以中断不能够被CPU感知，
 }
 
 // add a character to the output buffer and tell the
@@ -92,15 +99,17 @@ uartputc(int c)
     for(;;)
       ;
   }
-  while(uart_tx_w == uart_tx_r + UART_TX_BUF_SIZE){
+  //如果读写指针指向同一个位置，说明是空的
+  while(uart_tx_w == uart_tx_r + UART_TX_BUF_SIZE){//给定的缓冲区满了
+  //因为是一个环形数组，所以r再w的前一个，就说明满了
     // buffer is full.
     // wait for uartstart() to open up space in the buffer.
-    sleep(&uart_tx_r, &uart_tx_lock);
+    sleep(&uart_tx_r, &uart_tx_lock);//满了就休眠
   }
-  uart_tx_buf[uart_tx_w % UART_TX_BUF_SIZE] = c;
-  uart_tx_w += 1;
+  uart_tx_buf[uart_tx_w % UART_TX_BUF_SIZE] = c;//再UART内部有一个buffer用来发送数据，buffer大小32字符，
+  uart_tx_w += 1;//shell被认为是一个生产者,所以会调用这个函数
   uartstart();
-  release(&uart_tx_lock);
+  release(&uart_tx_lock);  
 }
 
 
@@ -131,28 +140,30 @@ uartputc_sync(int c)
 // caller must hold uart_tx_lock.
 // called from both the top- and bottom-half.
 void
-uartstart()
+uartstart()//这个函数就是通知设备执行操作，首先就是检查当前设备是否空闲，空闲的话，从buffer里面读数据，
 {
   while(1){
     if(uart_tx_w == uart_tx_r){
       // transmit buffer is empty.
+      // 读写指针指向同一个位置，说明数据都读取完了
       return;
     }
     
     if((ReadReg(LSR) & LSR_TX_IDLE) == 0){
-      // the UART transmit holding register is full,
+      // the UART transmit holding register is full, 
       // so we cannot give it another byte.
       // it will interrupt when it's ready for a new byte.
+      // 数据满了，我们也不能继续给一个字节，THR必须不能是满的
       return;
     }
     
-    int c = uart_tx_buf[uart_tx_r % UART_TX_BUF_SIZE];
-    uart_tx_r += 1;
+    int c = uart_tx_buf[uart_tx_r % UART_TX_BUF_SIZE];//从缓冲区里面读数据
+    uart_tx_r += 1;//读指针向后走
     
     // maybe uartputc() is waiting for space in the buffer.
     wakeup(&uart_tx_r);
     
-    WriteReg(THR, c);
+    WriteReg(THR, c);//如果有数据的话，就把他写到THR里面，发送给寄存器，相当于告诉设备，这里有一个字节需要发送，一旦发送到设备，应用程序的shell就能继续执行
   }
 }
 
@@ -163,7 +174,7 @@ uartgetc(void)
 {
   if(ReadReg(LSR) & 0x01){
     // input data is ready.
-    return ReadReg(RHR);
+    return ReadReg(RHR);//从里面获取数据
   } else {
     return -1;
   }
@@ -177,14 +188,17 @@ uartintr(void)
 {
   // read and process incoming characters.
   while(1){
-    int c = uartgetc();
+    int c = uartgetc();//从uart里面读取数据，把这个读取的数据再放到UART
     if(c == -1)
       break;
     consoleintr(c);
   }
-
+  //因为我们现在键盘里面还没有输入任何东西，所以直接就跳转到这里
   // send buffered characters.
   acquire(&uart_tx_lock);
   uartstart();
   release(&uart_tx_lock);
 }
+
+//bottom部分通常都是中断处理方法，当一个中断被送到CPU时，设置CPU接收到这个中断，cpu会调用相应的方法，这个不会运行在某个进程的上下文中
+//top是用户进程，给内核其他部分调用的接口

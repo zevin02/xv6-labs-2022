@@ -444,14 +444,15 @@ wait(uint64 addr)
 void
 scheduler(void)
 {
+  //这个函数主要是用来运行进程
   struct proc *p;
   struct cpu *c = mycpu();
   
   c->proc = 0;
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
-    intr_on();
-
+    intr_on();//先使CPU能接收中断，打开中断标志位,所有的核都能够运行这个函数
+    //现在中断被打开了，如果PLIC正好有pending的打断，那么这个CPU核会收到中断
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
       if(p->state == RUNNABLE) {

@@ -134,7 +134,7 @@ runcmd(struct cmd *cmd)
 int
 getcmd(char *buf, int nbuf)
 {
-  write(2, "$ ", 2);
+  write(2, "$ ", 2);//尽管console背后是UART设备，但是从应用程序来看，就是个普通文件，shell只是向fd=2里面写了数据
   memset(buf, 0, nbuf);
   gets(buf, nbuf);
   if(buf[0] == 0) // EOF

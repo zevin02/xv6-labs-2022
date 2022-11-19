@@ -138,13 +138,13 @@ filewrite(struct file *f, uint64 addr, int n)
 
   if(f->writable == 0)
     return -1;
-
+  //判断文件描述符的类型，mknod生成的文件描述符是数据设备（FD_DEVICE）
   if(f->type == FD_PIPE){
-    ret = pipewrite(f->pipe, addr, n);
+    ret = pipewrite(f->pipe, addr, n);//调用自己已经设置好的write回调函数
   } else if(f->type == FD_DEVICE){
     if(f->major < 0 || f->major >= NDEV || !devsw[f->major].write)
       return -1;
-    ret = devsw[f->major].write(1, addr, n);
+    ret = devsw[f->major].write(1, addr, n);//对于设备类型的文件描述符，我们会为这个设备执行相应的write函数
   } else if(f->type == FD_INODE){
     // write a few blocks at a time to avoid exceeding
     // the maximum log transaction size, including

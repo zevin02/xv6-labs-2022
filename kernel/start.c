@@ -37,6 +37,7 @@ start()
   w_medeleg(0xffff);
   w_mideleg(0xffff);
   w_sie(r_sie() | SIE_SEIE | SIE_STIE | SIE_SSIE);
+  //这里将所有的寄存器都设置成s mode，然后设置SIE寄存器接收外部，软件，和定时器中断
 
   // configure Physical Memory Protection to give supervisor mode
   // access to all of physical memory.
@@ -44,6 +45,7 @@ start()
   w_pmpcfg0(0xf);
 
   // ask for clock interrupts.
+  // 初始化定时器
   timerinit();
 
   // keep each CPU's hartid in its tp register, for cpuid().
