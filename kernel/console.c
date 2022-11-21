@@ -68,7 +68,7 @@ consolewrite(int user_src, uint64 src, int n)//因为write设备是console，所
 
   for(i = 0; i < n; i++){
     char c;
-    if(either_copyin(&c, user_src, src+i, 1) == -1)//将字符拷入
+    if(either_copyin(&c, user_src, src+i, 1) == -1)//write,从用户态把数据拷贝到内核态，
       break;
     uartputc(c);//将字符写入给UART设备，这个函数会实际打印字符
   }

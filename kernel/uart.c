@@ -73,7 +73,7 @@ uartinit(void)//这个函数实际上就是配置好了UART芯片，使其能够
   WriteReg(LCR, LCR_EIGHT_BITS);
 
   // reset and enable FIFOs.
-  //重置FIFO
+  //重置并打开FIFO
   WriteReg(FCR, FCR_FIFO_ENABLE | FCR_FIFO_CLEAR);
 
   // enable transmit and receive interrupts.
@@ -108,8 +108,8 @@ uartputc(int c)
   }
   uart_tx_buf[uart_tx_w % UART_TX_BUF_SIZE] = c;//再UART内部有一个buffer用来发送数据，buffer大小32字符，
   uart_tx_w += 1;//shell被认为是一个生产者,所以会调用这个函数
-  uartstart();
-  release(&uart_tx_lock);  
+  uartstart();//调用这个函数来启动设备传输
+  release(&uart_tx_lock);
 }
 
 
@@ -142,6 +142,7 @@ uartputc_sync(int c)
 void
 uartstart()//这个函数就是通知设备执行操作，首先就是检查当前设备是否空闲，空闲的话，从buffer里面读数据，
 {
+  //通常第一个字节都是通过uartputs来调用这个函数，而后面都是通过uartintr中断来调用这个函数的
   while(1){
     if(uart_tx_w == uart_tx_r){
       // transmit buffer is empty.
