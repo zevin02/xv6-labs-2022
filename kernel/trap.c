@@ -160,8 +160,10 @@ kerneltrap()
   w_sstatus(sstatus);
 }
 
+//计时器中断会和sleep产生冲突，如果一个自选锁被中断使用，那么CPU必须保证在中断的时候不能够获得锁
+
 void
-clockintr()
+clockintr()//xv6在获得锁的时候，直接就把中断关闭了
 {
   acquire(&tickslock);
   ticks++;

@@ -39,11 +39,12 @@
 #define WriteReg(reg, v) (*(Reg(reg)) = (v))  
 
 // the transmit output buffer.
-struct spinlock uart_tx_lock;
+struct spinlock uart_tx_lock;//uart只有一把锁，我们可以认为是一个粗粒度的锁设计
 #define UART_TX_BUF_SIZE 32
 char uart_tx_buf[UART_TX_BUF_SIZE];
 uint64 uart_tx_w; // write next to uart_tx_buf[uart_tx_w % UART_TX_BUF_SIZE]，为consumer提供的读指针
-uint64 uart_tx_r; // read next from uart_tx_buf[uart_tx_r % UART_TX_BUF_SIZE]，为producer提供的写指针,来构建一个环形buffer队列
+uint64 uart_tx_r; // read next from uart_tx_buf[uart_tx_r % UART_TX_BUF_SIZE]，为producer提供的写指针,来构建一个环形buffer队列，指向下一个需要被传输的位置
+//现在是有两个指针，读指针内容是需要被显示，写指针接收例如printf的数据，
 
 extern volatile int panicked; // from printf.c
 
@@ -94,7 +95,7 @@ void
 uartputc(int c)
 {
   acquire(&uart_tx_lock);
-
+  //这个地方如果没有关闭中断，此时这个uartputc拿着这把锁，在uart传输完字符后，就会发送一个中断，到uartintr，也会索要锁，就会造成死锁，同一个cpu对一把锁申请两次
   if(panicked){
     for(;;)
       ;
@@ -157,14 +158,15 @@ uartstart()//这个函数就是通知设备执行操作，首先就是检查当�
       // 数据满了，我们也不能继续给一个字节，THR必须不能是满的
       return;
     }
-    
-    int c = uart_tx_buf[uart_tx_r % UART_TX_BUF_SIZE];//从缓冲区里面读数据
-    uart_tx_r += 1;//读指针向后走
+    //这个锁保证了，在下一个字符被写到缓存里面时，可以处理完缓存里的数据
+    int c = uart_tx_buf[uart_tx_r % UART_TX_BUF_SIZE];//从缓冲区里面读数据，这里面的数据都是我们需要进行输出到显示机器上的
+    uart_tx_r += 1;//读指针向后走，一直循环往后发送，直到缓存没数据或者发送reg满了
     
     // maybe uartputc() is waiting for space in the buffer.
     wakeup(&uart_tx_r);
     
     WriteReg(THR, c);//如果有数据的话，就把他写到THR里面，发送给寄存器，相当于告诉设备，这里有一个字节需要发送，一旦发送到设备，应用程序的shell就能继续执行
+    //这里锁确保了THR寄存器只有一个写入者
   }
 }
 
@@ -196,7 +198,7 @@ uartintr(void)
   }
   //因为我们现在键盘里面还没有输入任何东西，所以直接就跳转到这里
   // send buffered characters.
-  acquire(&uart_tx_lock);
+  acquire(&uart_tx_lock);//这个地方获得锁，是因为在printf调用时，也会运行uartstart，我们要确保THR寄存器只有一个写入者，所以这里也需要上锁，和上面从putc进去成为相同的情况
   uartstart();
   release(&uart_tx_lock);
 }
