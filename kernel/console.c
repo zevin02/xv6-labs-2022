@@ -36,8 +36,7 @@
 //动态的在poling和interrupt之间进行动态的转换，轮询的效率太低了，我们直接可以查看寄存器里面的内容
 
 void
-consputc(int c)//把字符输出到console上给用户看，之后字符被放在了buff里面，遇到换行的时候，就唤醒sleep的进程
-//把数据读取出来
+consputc(int c)//把字符发送给uart，让他来发送，printf发送，不是write发送的
 {
   if(c == BACKSPACE){
     // if the user typed backspace, overwrite with a space.
@@ -147,9 +146,9 @@ consoleread(int user_dst, uint64 dst, int n)
 // wake up consoleread() if a whole line has arrived.
 //
 void
-consoleintr(int c)
+consoleintr(int c)//这个东西时处理从键盘上输入的字符
 {
-  acquire(&cons.lock);
+  acquire(&cons.lock);//持有锁
 
   switch(c){
   case C('P'):  // Print process list.
@@ -183,7 +182,7 @@ consoleintr(int c)
         // wake up consoleread() if a whole line (or end-of-file)
         // has arrived.
         cons.w = cons.e;
-        wakeup(&cons.r);
+        wakeup(&cons.r);//当换行符到达的时候，任何等待控制台输入的进程都应该被唤醒
       }
     }
     break;
