@@ -6,7 +6,7 @@
 
 void main();
 void timerinit();
-
+//当前的所有代码都是处在机器模式下的
 // entry.S needs one stack per CPU.
 __attribute__ ((aligned (16))) char stack0[4096 * NCPU];
 
@@ -65,12 +65,14 @@ void
 timerinit()
 {
   // each CPU has a separate source of timer interrupts.
+  //对CLINT硬件进行编程，能够在特定的延迟后生成中断
   int id = r_mhartid();
 
   // ask the CLINT for a timer interrupt.
-  int interval = 1000000; // cycles; about 1/10th second in qemu.
+  int interval = 1000000; // cycles; about 1/10th second in qemu.，这么长时间，就会生成一次中断
   *(uint64*)CLINT_MTIMECMP(id) = *(uint64*)CLINT_MTIME + interval;
 
+  //设置一个scrtch区域，类似trapfreme，保存寄存器和CLINT寄存器的地址
   // prepare information in scratch[] for timervec.
   // scratch[0..2] : space for timervec to save registers.
   // scratch[3] : address of CLINT MTIMECMP register.
@@ -81,7 +83,7 @@ timerinit()
   w_mscratch((uint64)scratch);
 
   // set the machine-mode trap handler.
-  w_mtvec((uint64)timervec);
+  w_mtvec((uint64)timervec);//设置定时器中断的stvec的值，到达timervec，使能生成定时器中断
 
   // enable machine-mode interrupts.
   w_mstatus(r_mstatus() | MSTATUS_MIE);

@@ -43,5 +43,5 @@ main()
     plicinithart();   // ask PLIC for device interrupts
   }
 
-  scheduler();        
+  scheduler(); //为每个CPU都创建了线程调度器       
 }

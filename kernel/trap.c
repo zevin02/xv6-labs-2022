@@ -76,7 +76,7 @@ usertrap(void)
   if(killed(p))
     exit(-1);
 
-  // give up the CPU if this is a timer interrupt.
+  // give up the CPU if this is a timer interrupt.时钟中断就直接让出当前的CPU
   if(which_dev == 2)
     yield();
 
@@ -208,7 +208,7 @@ devintr()
     // forwarded by timervec in kernelvec.S.
 
     if(cpuid() == 0){
-      clockintr();
+      clockintr();//计时器中断
     }
     
     // acknowledge the software interrupt by clearing
