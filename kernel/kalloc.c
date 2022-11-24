@@ -60,11 +60,11 @@ void kfree(void *pa)
   struct run *r;
   acquire(&ref.lock);
   --ref.refcnt[(uint64)pa / PGSIZE];
-  release(&ref.lock);
+  // release(&ref.lock);
   // Fill with junk to catch dangling refs.
   if (ref.refcnt[(uint64)pa / PGSIZE] == 0)
   {
-    // release(&ref.lock);
+    release(&ref.lock);
     memset(pa, 1, PGSIZE);//当引用计数为0的时候，才把这个空间释放，同时添加到空闲链表里面
     r = (struct run *)pa;
     acquire(&kmem.lock);
@@ -72,10 +72,10 @@ void kfree(void *pa)
     kmem.freelist = r;
     release(&kmem.lock);
   }
-  // else
-  // {
-  //   release(&ref.lock);
-  // }
+  else
+  {
+    release(&ref.lock);
+  }
 }
 
 // Allocate one 4096-byte page of physical memory.

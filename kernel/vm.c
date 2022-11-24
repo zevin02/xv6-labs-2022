@@ -327,13 +327,13 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)//将两个pagetable进行�
     // memmove(mem, (char*)pa, PGSIZE);
 
     if(mappages(new, i, PGSIZE, pa, flags) != 0){
-       kfree((void*)pa);
+       kfree((void*)pa);//减少引用计数
 
       goto err;
     }
     else
     {
-      refadd(pa);
+      refadd(pa);//添加印社
     }
   }
   return 0;
