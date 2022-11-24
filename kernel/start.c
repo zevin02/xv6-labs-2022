@@ -49,7 +49,7 @@ start()
   timerinit();
 
   // keep each CPU's hartid in its tp register, for cpuid().
-  int id = r_mhartid();
+  int id = r_mhartid();//确保cpu的tp始终保存cpu的hartid很麻烦，mstart在cpu启动的时候设置tp寄存器，在m mode
   w_tp(id);
 
   // switch to supervisor mode and jump to main().

@@ -1,7 +1,8 @@
 // Saved registers for kernel context switches.
 struct context {
-  uint64 ra;
-  uint64 sp;
+  //
+  uint64 ra;//0
+  uint64 sp;//8
 
   // callee-saved
   uint64 s0;
@@ -19,11 +20,13 @@ struct context {
 };
 
 // Per-CPU state.
+//每个cpu调度期都有自己的独立的栈
+//每个、cpu维护这个结构体
 struct cpu {
-  struct proc *proc;          // The process running on this cpu, or null.
-  struct context context;     // swtch() here to enter scheduler().
+  struct proc *proc;          // The process running on this cpu, or null.cpu上是否有运行一个进程，有的话，就指定，没有的话，就设置0
+  struct context context;     // swtch() here to enter scheduler().这个地方的上下文是该cpu对应的scheduler线程的上下文（里面包含的就是所有内核信息）
   int noff;                   // Depth of push_off() nesting.锁嵌套的级别
-  int intena;                 // Were interrupts enabled before push_off()?
+  int intena;                 // Were interrupts enabled before push_off()?在关闭中断前，是否允许中断
 };
 
 extern struct cpu cpus[NCPU];
@@ -83,7 +86,7 @@ enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 // Per-process state
 struct proc {
-  struct spinlock lock;
+  struct spinlock lock;//用来保护我们看到的东西，两个调度器不会获取同一个runable进程去运行他
 
   // p->lock must be held when using these:
   enum procstate state;        // Process state，进程的状态，running：当前在某个CPU上运行；runable：没在运行，但是CPU一空闲就向执行；sleeping等待IO事件
@@ -96,7 +99,7 @@ struct proc {
   struct proc *parent;         // Parent process
 
   // these are private to the process, so p->lock need not be held.
-  uint64 kstack;               // Virtual address of kernel stack
+  uint64 kstack;               // Virtual address of kernel stack，
   uint64 sz;                   // Size of process memory (bytes)
   pagetable_t pagetable;       // User page table
   struct trapframe *trapframe; // data page for trampoline.S

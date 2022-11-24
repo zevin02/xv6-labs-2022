@@ -6,7 +6,7 @@
 #include "proc.h"
 #include "defs.h"
 
-struct cpu cpus[NCPU];
+struct cpu cpus[NCPU];//可以使用tp对】cpu结构体数组进行索引
 
 struct proc proc[NPROC];
 
@@ -106,6 +106,8 @@ allocpid()
 // If found, initialize state required to run in the kernel,
 // and return with p->lock held.
 // If there are no free procs, or a memory allocation fails, return 0.
+
+// when called switch func firstly ,we need to pretend a thread called switch so that we can jump to that code
 static struct proc*
 allocproc(void)
 {
@@ -143,8 +145,9 @@ found:
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
-  p->context.ra = (uint64)forkret;
-  p->context.sp = p->kstack + PGSIZE;
+  //我们在返回的时候跳转到了forkret第一条指令的地址
+  p->context.ra = (uint64)forkret;//第一次调用switch时，”另一个“调用switch函数的线程context对象，被启动时的第一个进程和fork调用,所以switch返回的时候，就跳到forkret的地址
+  p->context.sp = p->kstack + PGSIZE;//这两个都是我们伪造的,这样第一个switch能够正常运行
 
   return p;
 }
@@ -441,6 +444,8 @@ wait(uint64 addr)
 //  - swtch to start running that process.
 //  - eventually that process transfers control
 //    via swtch back to the scheduler.
+// 这里的锁，保证了1. 将进程从running-》runable 2. 将进程的reg 保存再context对象  3. 停止使用当前进程的栈，这3个操作是原子的，要么全发生，要么全不发生
+
 void
 scheduler(void)
 {
@@ -455,21 +460,24 @@ scheduler(void)
     //现在中断被打开了，如果PLIC正好有pending的打断，那么这个CPU核会收到中断
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
-      if(p->state == RUNNABLE) {
+      if(p->state == RUNNABLE) {//到这里去查找一个runable的线程，然后再切换到这个线程上去
         // Switch to chosen process.  It is the process's job
         // to release its lock and then reacquire it
         // before jumping back to us.
-        p->state = RUNNING;
+        p->state = RUNNING;//因为我们现在需要查找一个runable的进程，所以现在找到了，然后我们需要切换到那里
         c->proc = p;
         swtch(&c->context, &p->context);
+        //线程切换，我们现在已经先切换到当前CPU的核心调度器的堆栈上执行了
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
-        c->proc = 0;
+        c->proc = 0;//因为这里我们已经停止了spin进程的运行，所以这里我们设置直接抹去spin进程的记录
+        //因为没有再这个cpu核上运行这个进程，所以我们将cpu运行的这个进程对象设置为0
+
       }
       release(&p->lock);
     }
-  }
+  }   
 }
 
 // Switch to scheduler.  Must hold only p->lock
@@ -480,31 +488,33 @@ scheduler(void)
 // break in the few places where a lock is held but
 // there's no process.
 void
-sched(void)
+sched(void)//这些代码都是用来检察的，最重要的就是swtch
 {
   int intena;
   struct proc *p = myproc();
 
-  if(!holding(&p->lock))
+  if(!holding(&p->lock))//这些代码都是用来检查用的，这个时用来检查这个进程是否拥有了这个锁，我们希望要有锁
     panic("sched p->lock");
-  if(mycpu()->noff != 1)
+  if(mycpu()->noff != 1)//我们希望有锁
     panic("sched locks");
-  if(p->state == RUNNING)
+  if(p->state == RUNNING)//我们希望这个地方已经被设置过了runable
     panic("sched running");
   if(intr_get())
     panic("sched interruptible");
 
-  intena = mycpu()->intena;
-  swtch(&p->context, &mycpu()->context);
-  mycpu()->intena = intena;
+  intena = mycpu()->intena;//获得当前cpu的中断状态
+  swtch(&p->context, &mycpu()->context);//c是指向这个CPU的结构体,cpu的上下文里面包含的是该cpu对应的调度器的线程的上下文
+  //
+  mycpu()->intena = intena;//切换回来后，恢复他的中断状态,在cpu context里面的ra的值，就是这个地方的地址,就是在切换回来后，就会到达这个位置
 }
 
 // Give up the CPU for one scheduling round.
 void
 yield(void)
 {
+  //每个进程都有独立的内核线程
   struct proc *p = myproc();
-  acquire(&p->lock);
+  acquire(&p->lock);//先获得锁，因为我们需要对进程进行修改，不希望有别的进程会影响
   p->state = RUNNABLE;
   sched();
   release(&p->lock);
@@ -528,7 +538,7 @@ forkret(void)
     fsinit(ROOTDEV);
   }
 
-  usertrapret();
+  usertrapret();//直接返回到用户空间，这里什么也没有，trampoline也是fake出来的
 }
 
 // Atomically release lock and sleep on chan.
@@ -589,7 +599,7 @@ kill(int pid)
   struct proc *p;
 
   for(p = proc; p < &proc[NPROC]; p++){
-    acquire(&p->lock);
+    acquire(&p->lock);//这个lock，让出cpu
     if(p->pid == pid){
       p->killed = 1;
       if(p->state == SLEEPING){

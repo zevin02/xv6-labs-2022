@@ -78,7 +78,7 @@ usertrap(void)
 
   // give up the CPU if this is a timer interrupt.时钟中断就直接让出当前的CPU
   if(which_dev == 2)
-    yield();
+    yield();//让出CPU，让调度器选择进程中的另一个内核线程来运行，执行内核切换
 
   usertrapret();
 }
@@ -215,7 +215,7 @@ devintr()
     // the SSIP bit in sip.
     w_sip(r_sip() & ~2);
 
-    return 2;
+    return 2;//这里定时器终端返回的就是2
   } else {
     return 0;
   }
