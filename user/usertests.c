@@ -1377,7 +1377,7 @@ linktest(char *s)
   }
 
   unlink("lf2");
-  if(link("lf2", "lf1") >= 0){
+  if(link("lf2", "lf1") >= 0){//这个地方出问题
     printf("%s: link non-existent succeeded! oops\n", s);
     exit(1);
   }
@@ -2422,6 +2422,7 @@ stacktest(char *s)
 }
 
 // check that writes to text segment fault
+//这个东西是用来检查段错误
 void
 textwrite(char *s)
 {
