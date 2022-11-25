@@ -156,7 +156,7 @@ found:
 // including user pages.
 // p->lock must be held.
 static void
-freeproc(struct proc *p)
+freeproc(struct proc *p)//释放进程的所有东西
 {
   if(p->trapframe)
     kfree((void*)p->trapframe);
@@ -171,7 +171,7 @@ freeproc(struct proc *p)
   p->chan = 0;
   p->killed = 0;
   p->xstate = 0;
-  p->state = UNUSED;
+  p->state = UNUSED;//父进程清理完所有资源后，子进程就被设置为unset了
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -354,11 +354,11 @@ exit(int status)
   if(p == initproc)
     panic("init exiting");
 
-  // Close all open files.
+  // Close all open files.关闭所有自己已打开的文件
   for(int fd = 0; fd < NOFILE; fd++){
     if(p->ofile[fd]){
       struct file *f = p->ofile[fd];
-      fileclose(f);
+      fileclose(f);//因为关闭一个文件涉及了引用计数
       p->ofile[fd] = 0;
     }
   }
@@ -366,25 +366,25 @@ exit(int status)
   begin_op();
   iput(p->cwd);
   end_op();
-  p->cwd = 0;
+  p->cwd = 0;//进程有一个对于当前目录的记录，这个记录会随着cd指令的改变而改变，我们也需要将这个的引用给释放给文件系统
 
   acquire(&wait_lock);
 
   // Give any children to init.
-  reparent(p);
+  reparent(p);//如果一个进程要退出，但是这个进程又会又自己的子进程，他们就成了孤儿进程，所以我们需要将他么的父亲设置为init进程，一号 进程
 
   // Parent might be sleeping in wait().
-  wakeup(p->parent);
+  wakeup(p->parent);//每一个需要exit的进程，都有一个父进程在wait，所以我们需要唤醒父进程，
   
   acquire(&p->lock);
 
   p->xstate = status;
-  p->state = ZOMBIE;
+  p->state = ZOMBIE;//把进程的状态设置为僵尸状态
 
   release(&wait_lock);
 
   // Jump into the scheduler, never to return.
-  sched();
+  sched();//进入到线程调度机器中，之后永远都不会再返回了，调度期会决定去运行什么进程，因为scheduler只会运行runable的进程
   panic("zombie exit");
 }
 
@@ -403,13 +403,14 @@ wait(uint64 addr)
     // Scan through table looking for exited children.
     havekids = 0;
     for(pp = proc; pp < &proc[NPROC]; pp++){
-      if(pp->parent == p){
+      if(pp->parent == p){//找到父进程是自己
         // make sure the child isn't still in exit() or swtch().
         acquire(&pp->lock);
 
         havekids = 1;
-        if(pp->state == ZOMBIE){
+        if(pp->state == ZOMBIE){//自己的状态是zombie
           // Found one.
+          // 再exit中已经把资源快释放完了，现在需要由父进程释放pagetable和内存
           pid = pp->pid;
           if(addr != 0 && copyout(p->pagetable, addr, (char *)&pp->xstate,
                                   sizeof(pp->xstate)) < 0) {
@@ -417,7 +418,7 @@ wait(uint64 addr)
             release(&wait_lock);
             return -1;
           }
-          freeproc(pp);
+          freeproc(pp);//由父进程去释放子进程的资源
           release(&pp->lock);
           release(&wait_lock);
           return pid;
@@ -435,6 +436,7 @@ wait(uint64 addr)
     // Wait for a child to exit.
     sleep(p, &wait_lock);  //DOC: wait-sleep
   }
+  //init进程需要再循环里面一直调用wait，当一个进程退出时，就编程了init的子进程，需要释放这些资源
 }
 
 // Per-CPU process scheduler.
@@ -544,8 +546,9 @@ forkret(void)
 // Atomically release lock and sleep on chan.
 // Reacquires lock when awakened.
 void
-sleep(void *chan, struct spinlock *lk)
+sleep(void *chan, struct spinlock *lk)//在调用这个函数的时候这个锁还在被sleep持有
 {
+  //sleep不需要知道wakeup的条件，但是需要知道保护这个条件的锁
   struct proc *p = myproc();
   
   // Must acquire p->lock in order to
@@ -555,15 +558,17 @@ sleep(void *chan, struct spinlock *lk)
   // (wakeup locks p->lock),
   // so it's okay to release lk.
 
-  acquire(&p->lock);  //DOC: sleeplock1
-  release(lk);
+  acquire(&p->lock);  //DOC: sleeplock1，获得该进程的锁
+  release(lk);//把这个条件的锁给释放掉
+  //保证了下面的代码仍然是原子的，同时保证了在进程切换的时候，只有一个进程锁
 
   // Go to sleep.
   p->chan = chan;
-  p->state = SLEEPING;
+  p->state = SLEEPING;//状态设置成sleeping
 
-  sched();
-
+  sched();//进程切换，查找runable 的进程
+  //返回，重新需要获得锁，
+  //在sched线程调度机器中会把这个锁给释放掉，释放完之后。这个锁就能够获得了，wakeup就能被调用了
   // Tidy up.
   p->chan = 0;
 
@@ -577,15 +582,17 @@ sleep(void *chan, struct spinlock *lk)
 void
 wakeup(void *chan)
 {
+  //wakeup需要同时持有两把锁，才能够被运行，查看进程的状态
   struct proc *p;
-
+  //sleep中释放了条件锁，所以这个wakeup可以被调用
+  //但是sleep中人让持有进程锁，所以，无法查看进程的状态
   for(p = proc; p < &proc[NPROC]; p++) {
-    if(p != myproc()){
-      acquire(&p->lock);
-      if(p->state == SLEEPING && p->chan == chan) {
-        p->state = RUNNABLE;
+    if(p != myproc()){//查找的对象不是当前的进程
+      acquire(&p->lock);//加锁，原子操作
+      if(p->state == SLEEPING && p->chan == chan) {//符合条件
+        p->state = RUNNABLE;//设置为可运行，这样就可以被进程切换回去
       }
-      release(&p->lock);
+      release(&p->lock);//释放锁
     }
   }
 }
@@ -603,6 +610,8 @@ kill(int pid)
     if(p->pid == pid){
       p->killed = 1;
       if(p->state == SLEEPING){
+        //如果这个要被杀掉的进程时sleeping，那么我们就设置他为runable，
+        //这样调度期就可以运行这个进程
         // Wake process from sleep().
         p->state = RUNNABLE;
       }

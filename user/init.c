@@ -39,7 +39,7 @@ main(void)
     for(;;){
       // this call to wait() returns if the shell exits,
       // or if a parentless process exits.
-      wpid = wait((int *) 0);
+      wpid = wait((int *) 0);//在这个地方一直wait，把一些进程给回收掉
       if(wpid == pid){
         // the shell exited; restart it.
         break;

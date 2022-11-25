@@ -90,7 +90,7 @@ struct proc {
 
   // p->lock must be held when using these:
   enum procstate state;        // Process state，进程的状态，running：当前在某个CPU上运行；runable：没在运行，但是CPU一空闲就向执行；sleeping等待IO事件
-  void *chan;                  // If non-zero, sleeping on chan
+  void *chan;                  // If non-zero, sleeping on chan，如果这个非0,就在这个条件下sleep
   int killed;                  // If non-zero, have been killed
   int xstate;                  // Exit status to be returned to parent's wait
   int pid;                     // Process ID

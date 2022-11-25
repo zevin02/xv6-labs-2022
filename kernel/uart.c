@@ -189,6 +189,20 @@ uartgetc(void)
 void
 uartintr(void)
 {
+  /*
+
+  acquire(&uart_tx_lock);
+  //这里sleep已经释放了条件锁，
+  if(ReadReg(LSR)&LSR_TX_IDLE)//读取内存映射寄存器，检查相应的传输完成的标志位
+  {
+    //uart 完成了传输，并且唤醒一个传输线程
+    tx_done=1;
+    wakeup(&tx_chan);因为中断需要获取这个锁，但是我们又不能在释放锁和进程将自己标记为SLEEPING之间留有窗口
+  }
+  release(&uart_tx_lock);
+
+  */
+
   // read and process incoming characters.
   while(1){
     int c = uartgetc();//从uart里面读取数据，把这个读取的数据再放到UART
@@ -205,3 +219,35 @@ uartintr(void)
 
 //bottom部分通常都是中断处理方法，当一个中断被送到CPU时，设置CPU接收到这个中断，cpu会调用相应的方法，这个不会运行在某个进程的上下文中
 //top是用户进程，给内核其他部分调用的接口
+
+
+
+/*
+shell输出的时候调用write系统调用走到这里，在循环中将buf【i】写到uart硬件里面，uart一次只能接收一个字符的传输
+但是会有很多字符需要到uart硬件上
+我们可以向硬件写入一个字符，并等待uart硬件说，我完成了上一个字符的传输，准备好传输下一个字符
+之后驱动程序才能写入下一个字符，这样的话，效率可能很低
+所以这里我们不想通过循环来等待uart完成字符的传输
+
+uart会在传输好一个字符后就触发中断，
+
+
+void uartwrite(char buf[],int n)
+{
+  acquire(&uart_tx_lock);//这个锁被持有的条件是，sleep中已经持有了这个锁
+  int n=0;
+  while(i<n)
+  {
+    while(tx_done==0)
+    {
+      sleep(&tx_chan,&uart_tx_lock);//如果条件为1的话，就解除sleep，就会恢复执行
+    }
+    WriteReg(THR,buf[i]);
+    i+=1;
+    tx_done=0;
+  }
+  release(&uart_tx_lock);
+}
+
+对于每个传输的字符都有调用一次sleep和wakeup，等待传输完成，完成后会发送一个中断，这个中断就会唤醒这个sleep的线程
+*/
