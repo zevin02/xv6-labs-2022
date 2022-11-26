@@ -146,6 +146,7 @@ found:
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
   //我们在返回的时候跳转到了forkret第一条指令的地址
+  //而不是调度switch函数的位置
   p->context.ra = (uint64)forkret;//第一次调用switch时，”另一个“调用switch函数的线程context对象，被启动时的第一个进程和fork调用,所以switch返回的时候，就跳到forkret的地址
   p->context.sp = p->kstack + PGSIZE;//这两个都是我们伪造的,这样第一个switch能够正常运行
 
@@ -322,7 +323,7 @@ fork(void)
   release(&wait_lock);
 
   acquire(&np->lock);
-  np->state = RUNNABLE;
+  np->state = RUNNABLE;//这里的fork出来的进程状态就变成了runable，所以是可以被调度的
   release(&np->lock);
 
   return pid;
@@ -527,6 +528,8 @@ yield(void)
 void
 forkret(void)
 {
+  //fork出来的第一次被调度，直接从内核态返回用户态
+  //因为被调度的时候进来是持有自己的锁的，所以需要现在先把自己的锁先释放掉
   static int first = 1;
 
   // Still holding p->lock from scheduler.
@@ -557,7 +560,9 @@ sleep(void *chan, struct spinlock *lk)//在调用这个函数的时候这个锁�
   // guaranteed that we won't miss any wakeup
   // (wakeup locks p->lock),
   // so it's okay to release lk.
-
+  //我们奥考虑这个地方的进程锁和条件锁是不是同一把锁，
+  //如果是同一把锁的话，就会造成死锁
+  
   acquire(&p->lock);  //DOC: sleeplock1，获得该进程的锁
   release(lk);//把这个条件的锁给释放掉
   //保证了下面的代码仍然是原子的，同时保证了在进程切换的时候，只有一个进程锁
@@ -590,7 +595,7 @@ wakeup(void *chan)
     if(p != myproc()){//查找的对象不是当前的进程
       acquire(&p->lock);//加锁，原子操作
       if(p->state == SLEEPING && p->chan == chan) {//符合条件
-        p->state = RUNNABLE;//设置为可运行，这样就可以被进程切换回去
+        p->state = RUNNABLE;//设置为可运行，这样schedluer扫描线程的时候就能返回，就可以被进程切换回去
       }
       release(&p->lock);//释放锁
     }

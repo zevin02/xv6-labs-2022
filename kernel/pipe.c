@@ -10,11 +10,14 @@
 
 #define PIPESIZE 512
 
+//管道代码为读者写者提供了单独的睡眠通道，pi->nread，这会使得多个读者写着共享同一个管道会变得不高效
+//如果有多个读者写者，除了第一个醒来的进程外，其他进程看到条件仍然是错误的，再次睡眠
+
 struct pipe {
   struct spinlock lock;
-  char data[PIPESIZE];
-  uint nread;     // number of bytes read
-  uint nwrite;    // number of bytes written
+  char data[PIPESIZE];//数据缓冲区，这个缓冲区是环形的
+  uint nread;     // number of bytes read，统计从缓冲区读取的总字节数
+  uint nwrite;    // number of bytes written，从缓冲区写入的总字节数
   int readopen;   // read fd is still open
   int writeopen;  // write fd is still open
 };
@@ -76,23 +79,24 @@ pipeclose(struct pipe *pi, int writable)
 int
 pipewrite(struct pipe *pi, uint64 addr, int n)
 {
+  //假设对write和read的调度发生同时在不同的cpu上
   int i = 0;
   struct proc *pr = myproc();
 
-  acquire(&pi->lock);
+  acquire(&pi->lock);//先获得管道锁，假设write先获得锁
   while(i < n){
     if(pi->readopen == 0 || killed(pr)){
       release(&pi->lock);
       return -1;
     }
-    if(pi->nwrite == pi->nread + PIPESIZE){ //DOC: pipewrite-full
+    if(pi->nwrite == pi->nread + PIPESIZE){ //DOC: pipewrite-full，写入缓冲区满了，就环形读进程来读取
       wakeup(&pi->nread);
       sleep(&pi->nwrite, &pi->lock);
     } else {
       char ch;
       if(copyin(pr->pagetable, &ch, addr + i, 1) == -1)
         break;
-      pi->data[pi->nwrite++ % PIPESIZE] = ch;
+      pi->data[pi->nwrite++ % PIPESIZE] = ch;//拷贝到缓冲区里面
       i++;
     }
   }
@@ -109,7 +113,7 @@ piperead(struct pipe *pi, uint64 addr, int n)
   struct proc *pr = myproc();
   char ch;
 
-  acquire(&pi->lock);//用这个锁保护，条件锁
+  acquire(&pi->lock);//用这个锁保护，条件锁，read调用这个锁就会在这个地方一直自旋
   while(pi->nread == pi->nwrite && pi->writeopen){  //DOC: pipe-empty
     if(killed(pr)){
       release(&pi->lock);
@@ -119,13 +123,13 @@ piperead(struct pipe *pi, uint64 addr, int n)
     sleep(&pi->nread, &pi->lock); //DOC: piperead-sleep
   }
   for(i = 0; i < n; i++){  //DOC: piperead-copy
-    if(pi->nread == pi->nwrite)
+    if(pi->nread == pi->nwrite)//缓冲区被读空了
       break;
     ch = pi->data[pi->nread++ % PIPESIZE];
     if(copyout(pr->pagetable, addr + i, &ch, 1) == -1)
       break;
   }
-  wakeup(&pi->nwrite);  //DOC: piperead-wakeup
+  wakeup(&pi->nwrite);  //DOC: piperead-wakeup，环形write让他继续向管道里面写数据
   release(&pi->lock);
   return i;
 }
