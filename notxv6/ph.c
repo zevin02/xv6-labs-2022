@@ -7,13 +7,15 @@
 
 #define NBUCKET 5
 #define NKEYS 100000
+pthread_mutex_t put_lk;
+pthread_mutex_t get_lk;
 
 struct entry {
   int key;
   int value;
   struct entry *next;
 };
-struct entry *table[NBUCKET];
+struct entry *table[NBUCKET];//hash table，each value is a list，这个hash table就是一个临界资源
 int keys[NKEYS];
 int nthread = 1;
 
@@ -32,28 +34,32 @@ insert(int key, int value, struct entry **p, struct entry *n)
   struct entry *e = malloc(sizeof(struct entry));
   e->key = key;
   e->value = value;
-  e->next = n;
-  *p = e;
+  e->next = n;//头插
+  *p = e;//把对应的头指向hashtable 对应key的头上
 }
 
 static 
-void put(int key, int value)
+void put(int key, int value)//key就是要放进hash table里面的值
 {
-  int i = key % NBUCKET;
+  int i = key % NBUCKET;//函数函数
 
   // is the key already present?
   struct entry *e = 0;
-  for (e = table[i]; e != 0; e = e->next) {
+  for (e = table[i]; e != 0; e = e->next) {//链表遍历
     if (e->key == key)
       break;
   }
+  pthread_mutex_lock(&put_lk);
+
   if(e){
     // update the existing key.
-    e->value = value;
+    e->value = value;//该key值已经存在，就更新value
   } else {
+    //该key值没有找到，就往后插入这个元素
     // the new is new.
     insert(key, value, &table[i], table[i]);
   }
+  pthread_mutex_unlock(&put_lk);
 
 }
 
@@ -101,9 +107,11 @@ get_thread(void *xa)
 int
 main(int argc, char *argv[])
 {
-  pthread_t *tha;
+  pthread_t *tha;//线程，用来操作
   void *value;
   double t1, t0;
+  pthread_mutex_init(&put_lk,NULL);
+  pthread_mutex_init(&get_lk,NULL);
 
 
   if (argc < 2) {
@@ -115,15 +123,15 @@ main(int argc, char *argv[])
   srandom(0);
   assert(NKEYS % nthread == 0);
   for (int i = 0; i < NKEYS; i++) {
-    keys[i] = random();
+    keys[i] = random();//生成一些随机值
   }
 
   //
   // first the puts
   //
-  t0 = now();
+  t0 = now();//统计put的时间
   for(int i = 0; i < nthread; i++) {
-    assert(pthread_create(&tha[i], NULL, put_thread, (void *) (long) i) == 0);
+    assert(pthread_create(&tha[i], NULL, put_thread, (void *) (long) i) == 0);//把这个i传进去，这个i说明他是几号线程
   }
   for(int i = 0; i < nthread; i++) {
     assert(pthread_join(tha[i], &value) == 0);
