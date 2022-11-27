@@ -7,8 +7,7 @@
 
 #define NBUCKET 5
 #define NKEYS 100000
-pthread_mutex_t put_lk;
-pthread_mutex_t get_lk;
+pthread_mutex_t put_lk[NBUCKET];
 
 struct entry {
   int key;
@@ -49,17 +48,19 @@ void put(int key, int value)//key就是要放进hash table里面的值
     if (e->key == key)
       break;
   }
-  pthread_mutex_lock(&put_lk);
 
   if(e){
     // update the existing key.
+  pthread_mutex_lock(&put_lk[i]);
     e->value = value;//该key值已经存在，就更新value
+  pthread_mutex_unlock(&put_lk[i]);
   } else {
     //该key值没有找到，就往后插入这个元素
     // the new is new.
+  pthread_mutex_lock(&put_lk[i]);
     insert(key, value, &table[i], table[i]);
+  pthread_mutex_unlock(&put_lk[i]);
   }
-  pthread_mutex_unlock(&put_lk);
 
 }
 
@@ -110,8 +111,8 @@ main(int argc, char *argv[])
   pthread_t *tha;//线程，用来操作
   void *value;
   double t1, t0;
-  pthread_mutex_init(&put_lk,NULL);
-  pthread_mutex_init(&get_lk,NULL);
+  for(int i=0;i<NBUCKET;i++)
+  pthread_mutex_init(&put_lk[i],NULL);
 
 
   if (argc < 2) {
