@@ -262,7 +262,7 @@ create(char *path, short type, short major, short minor)
     return 0;
   }
 
-  if((ip = ialloc(dp->dev, type)) == 0){
+  if((ip = ialloc(dp->dev, type)) == 0){//调用ialloc为文件分配一个inode
     iunlockput(dp);
     return 0;
   }

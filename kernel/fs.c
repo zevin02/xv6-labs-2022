@@ -198,17 +198,20 @@ static struct inode* iget(uint dev, uint inum);
 struct inode*
 ialloc(uint dev, short type)
 {
+  //为一个文件分配一个inode
   int inum;
   struct buf *bp;
   struct dinode *dip;
 
   for(inum = 1; inum < sb.ninodes; inum++){
+    //遍历所有的inode的编号
     bp = bread(dev, IBLOCK(inum, sb));
-    dip = (struct dinode*)bp->data + inum%IPB;
+    dip = (struct dinode*)bp->data + inum%IPB;//查看对应的inode编号时候被使用了
     if(dip->type == 0){  // a free inode
+    //没有被使用，我们就把这个inode编号分配给这个文件
       memset(dip, 0, sizeof(*dip));
-      dip->type = type;
-      log_write(bp);   // mark it allocated on the disk
+      dip->type = type;//设置他的文件类型
+      log_write(bp);   // mark it allocated on the disk，把他标记为已分配，并把他写入到磁盘里面
       brelse(bp);
       return iget(dev, inum);
     }
