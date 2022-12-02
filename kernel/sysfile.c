@@ -253,6 +253,7 @@ create(char *path, short type, short major, short minor)
 
   ilock(dp);
 
+  //解析路径名并找到最后一个目录，查看我们需要创建的文件是否已经存在，如果已经存在就返回错误
   if((ip = dirlookup(dp, name, 0)) != 0){
     iunlockput(dp);
     ilock(ip);
@@ -261,7 +262,7 @@ create(char *path, short type, short major, short minor)
     iunlockput(ip);
     return 0;
   }
-
+  //我们想要创建的文件名并不存在，那么我们在文件系统上就要进行为文件分配inode
   if((ip = ialloc(dp->dev, type)) == 0){//调用ialloc为文件分配一个inode
     iunlockput(dp);
     return 0;
@@ -304,7 +305,8 @@ create(char *path, short type, short major, short minor)
 uint64
 sys_open(void)
 {
-  char path[MAXPATH];
+  //open，打开一个文件，获得其对应的文件描述符
+  char path[MAXPATH];//从用户态获取要打开的文件的路径名
   int fd, omode;
   struct file *f;
   struct inode *ip;
@@ -317,7 +319,7 @@ sys_open(void)
   begin_op();
 
   if(omode & O_CREATE){
-    ip = create(path, T_FILE, 0, 0);
+    ip = create(path, T_FILE, 0, 0);//如果在用户传入的时候有create标志位，我们就要进去创建一个文件
     if(ip == 0){
       end_op();
       return -1;

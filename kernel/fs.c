@@ -204,7 +204,9 @@ ialloc(uint dev, short type)
   struct dinode *dip;
 
   for(inum = 1; inum < sb.ninodes; inum++){
-    //遍历所有的inode的编号
+    //遍历所有的inode的编号，因为superblock里面保存着有多少个inode
+    //如果有多个进程同时调用create进来，都同时到了这个bread这个函数，那么我们应该如何避免互相影响呢
+    //所以我们就需要有高速缓存buffer cache
     bp = bread(dev, IBLOCK(inum, sb));
     dip = (struct dinode*)bp->data + inum%IPB;//查看对应的inode编号时候被使用了
     if(dip->type == 0){  // a free inode

@@ -31,6 +31,22 @@
 >
 >* 只有当`openfd count`和`refcnt`都为0的时候，才能把对应的`inode`给删除
 
+## 文件系统的分层结构
+文件系统的7层结构
+
+![在这里插入图片描述](https://img-blog.csdnimg.cn/441ff23ae4794d6f88f8ab24a28747ba.png)
+
+*  `disk`<u>这个是一个实际存储数据的存储设备，这个设备提供了持久化的存储,磁盘层读写和写入virtio硬盘上的块</u>
+* `buffer cache`:<u>这个buffer cache可以避免频繁的读写磁盘,我们就最经使用过的数据保存在内存里面,缓存磁盘块，确保每次只有一个内核进程可以修改存储在任何特定块的数据</u>
+* `logging`:<u>一次更新多个块，确保在崩溃的时候自动更新这些块，
+* `inode cache`:<u>
+* `inode`<u>提供单独的文件,每个文件表示为一个索引节点，
+* `directory`:<u>目录层为每个目录实现一种特殊的索引，内容就是一些列的目录项，每个目录项包含文件名和索引，
+* `name/fd`:文件描述符的操作，抽象了很多资源，管道，设备，文件
+
+
+
+
 ## 磁盘布局
 `sector`扇区就是磁盘读取的最小单位:512byte
 
@@ -41,10 +57,10 @@
 把磁盘分成了一个一个的block，都是1K大小
 
 
-* block[0]:一般都是作为<u>boot sector</u>来启动操作系统
-* block[1]：<u>super block</u>,包含了文件系统的系统信息，里面的数据很重要
+* block[0]:一般都是作为<u>boot sector</u>来启动操作系统，不使用（他保存引导扇区）
+* block[1]：<u>super block</u>,包含了文件系统的系统信息，里面的数据很重要，数据块数，inode节点数和日志块数，super block由一个mkfs的单独日志块来填充
 * blcok[2]-blcok[31]:<u>log block</u>,里面都是文件系统的日志块，
-* block[32]-block[44],里面**存储了所有inode的数据结构**，一个inode是64字节，一个块1024字节，所以一块里面只能存**16**个inode
+* block[32]-block[44],里面**存储了所有inode的数据结构**，一个inode是64字节，一个块1024字节，所以一块里面只能存**16**个inode，每个块里面可以有多个inode节点
 * block[45]:bitmap block,可以用来查看某个数据块是否被空闲，位图的方法，bitmap中1的位置代表是第几个block，map中的0或1代表这个位置是否被使用
 * block[46]-：后面就全部都是数据块，里面包含的就全都是数据了
 
@@ -96,7 +112,15 @@ write:595
 write:33--->更新该文件inode的size 大小
 
 ---将\n写入到x文件里
-write:595--->向
-write:33
+write:595--->向block[595]里面写数据\n
+write:33 --> 更新inode的大小
 ~~~
 这里会有一些阶段
+
+
+## sleeplock
+### 注意
+* 对于内存中，一个blcok只能有一个缓存
+* 在IO过程中使用sleeplock而不是spinlock，因为spinlock只适合短时间的，而sleeplcok适合使用在长时间的
+* 采用LRU作cache替换
+* spinlock来保护buffer cache的内部数据，sleep lock来保护单个block的cache

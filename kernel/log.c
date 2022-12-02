@@ -227,6 +227,7 @@ log_write(struct buf *b)
       break;
   }
   log.lh.block[i] = b->blockno;
+  printf("write: %d\n",b->blockno);
   if (i == log.lh.n) {  // Add new block to log?
     bpin(b);
     log.lh.n++;
