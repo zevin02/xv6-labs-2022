@@ -305,6 +305,9 @@ create(char *path, short type, short major, short minor)
 uint64
 sys_open(void)
 {
+  //每个文件操作都是在begin_op和end_op之间，这个就是一个事物，保证了事务要么全部完成，要么都不完成
+  //事物的所有写block操作都是原子性的
+
   //open，打开一个文件，获得其对应的文件描述符
   char path[MAXPATH];//从用户态获取要打开的文件的路径名
   int fd, omode;
@@ -316,7 +319,7 @@ sys_open(void)
   if((n = argstr(0, path, MAXPATH)) < 0)
     return -1;
 
-  begin_op();
+  begin_op();//开启一个事务
 
   if(omode & O_CREATE){
     ip = create(path, T_FILE, 0, 0);//如果在用户传入的时候有create标志位，我们就要进去创建一个文件
@@ -367,7 +370,8 @@ sys_open(void)
   }
 
   iunlock(ip);
-  end_op();
+  end_op();//事务完成，在end_op之前，数据并不会写入到实际的block里面，也就是说还在内存
+  //在end_up时我们会将数据写入到log里面
 
   return fd;
 }

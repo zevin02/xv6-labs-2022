@@ -120,6 +120,7 @@ bread(uint dev, uint blockno)//这个read是从内存中获得一个buffer，
 void
 bwrite(struct buf *b)//将修改后的缓冲区写入到磁盘的相应块里面
 {
+  //文件系统中的所有的bwrite都不能直接使用，所有的bwrite都被用log_write进行替代
   if(!holdingsleep(&b->lock))
     panic("bwrite");
   virtio_disk_rw(b, 1);
