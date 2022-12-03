@@ -41,7 +41,7 @@
 * `logging`:<u>一次更新多个块，确保在崩溃的时候自动更新这些块，
 * `inode cache`:<u>
 * `inode`<u>提供单独的文件,每个文件表示为一个索引节点，
-* `directory`:<u>目录层为每个目录实现一种特殊的索引，内容就是一些列的目录项，每个目录项包含文件名和索引，
+* `directory`:<u>目录层为每个目录实现一种特殊的索引，内容就是一些列的目录项，每个目录项包含文件名和索引，</u>
 * `name/fd`:文件描述符的操作，抽象了很多资源，管道，设备，文件
 
 
@@ -103,7 +103,7 @@ write:33--->分配inode，把inode的结构体分配在block33处,标记该inode
 write:33--->这个33,就说明的是我们写一些数据到inode里面，比如link count=1,之类的
 write:46--->这个46,就是向data block里面写数据，data block里面就全部都是文件的数据内容，46是根目录，因为我们创建了一个文件，他属于根目录下的一个文件，有文件名和inode的编号，
 write:32--->这个里面就是更新根目录的inode，更新inode size之类的
-write:33--->
+write:33---> update inode x
 
 ---将hi写入到x文件里面
 write:45---> 更新bitmap，文件系统会扫描bitmap中没使用的data block，找到对应的bit=0,设置bit=1,更新bitmap 
@@ -111,16 +111,56 @@ write:595--->这个就是往block[595]这个块里面写数据，h，下面的�
 write:595
 write:33--->更新该文件inode的size 大小
 
----将\n写入到x文件里
+---
+将\n写入到x文件里
 write:595--->向block[595]里面写数据\n
 write:33 --> 更新inode的大小
 ~~~
 这里会有一些阶段
 
-
 ## sleeplock
+
 ### 注意
 * 对于内存中，一个blcok只能有一个缓存
 * 在IO过程中使用sleeplock而不是spinlock，因为spinlock只适合短时间的，而sleeplcok适合使用在长时间的
 * 采用LRU作cache替换
 * spinlock来保护buffer cache的内部数据，sleep lock来保护单个block的cache
+
+# crash recovery
+
+## 文件系统崩溃的综述
+crash 或者电力故障会导致磁盘文件处在一个不正确的状态
+* 一个data blcok属于两个文件
+* 一个inode被分配给了两个不同的文件
+
+文件系统的故障我们是希望能在故障之后还能使用，避免数据的丢失
+
+系统崩溃的解决方法就是logging
+
+我们在创建文件的时候，写文件这样的文件系统操作，
+* 分配inode，在磁盘上设置为已经分配
+* 更新文件目录的data block
+
+文件系统的属性
+* 磁盘block要么空闲要么已经分配给了一个文件
+
+
+## file system crash的示例
+
+~~~c
+---创建x文件
+write:33--->分配inode，把inode的结构体分配在block33处,标记该inode被使用，我们使用type来表示inode是否空闲,
+write:33--->这个33,就说明的是我们写一些数据到inode里面，比如link count=1,之类的
+write:46--->这个46,就是向data block里面写数据，data block里面就全部都是文件的数据内容，46是根目录，因为我们创建了一个文件，他属于根目录下的一个文件，有文件名和inode的编号，
+write:32--->这个里面就是更新根目录的inode，更新inode size之类的
+write:33---> update inode x
+~~~
+>假如在初始化一个inode的时候发生了crash，后我们又重启了计算机，我们重新进入的时候，分配的`inode`就丢失了(因为这些都是在**内存**上操作的)
+>
+>* 因为这个inode还没有添加到对应的目录下能够进行对应的索引，所以没有出现在任何的目录下，同样我们也不能够删除这个inode，还占用了资源。
+
+如果我们先写入到对应的目录下，在分配inode
+
+>这个操作可以解决inode丢失的问题，但是同样也会出现很多问题，出现crash之后
+>
+>我们会在目录下面读取一个未被分配的inode，会出现不同的文件贡献一个inode

@@ -23,6 +23,8 @@
 #include "fs.h"
 #include "buf.h"
 
+
+//bcache这个缓冲区就是用链表进行串联，每次插入都是头插，头后面的数据都是最近使用的，越后面的数据都是最少使用的
 struct {
   struct spinlock lock;
   struct buf buf[NBUF];//保存磁盘块的缓冲区是一定的
@@ -44,6 +46,7 @@ binit(void)
   bcache.head.prev = &bcache.head;
   bcache.head.next = &bcache.head;
   for(b = bcache.buf; b < bcache.buf+NBUF; b++){
+    //对链表进行头插
     b->next = bcache.head.next;
     b->prev = &bcache.head;
     initsleeplock(&b->lock, "buffer");

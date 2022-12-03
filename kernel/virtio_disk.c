@@ -213,7 +213,7 @@ alloc3_desc(int *idx)
 }
 
 void
-virtio_disk_rw(struct buf *b, int write)
+virtio_disk_rw(struct buf *b, int write)//对磁盘进行读写的操作
 {
   uint64 sector = b->blockno * (BSIZE / 512);
 
