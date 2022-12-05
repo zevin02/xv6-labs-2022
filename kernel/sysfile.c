@@ -370,8 +370,8 @@ sys_open(void)
   }
 
   iunlock(ip);
-  end_op();//事务完成，在end_op之前，数据并不会写入到实际的block里面，也就是说还在内存
-  //在end_up时我们会将数据写入到log里面
+  end_op();//事务完成，在end_op之前，数据并不会写入到实际的block里面，就是说数据在内存和磁盘上的log区上，没有在实际应该存在的磁盘block区上
+  //在end_up时我们会将数据写入到log里面,里面实现commit 操作
 
   return fd;
 }
