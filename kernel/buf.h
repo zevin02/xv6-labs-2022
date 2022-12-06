@@ -4,7 +4,7 @@ struct buf {
   uint dev;
   uint blockno;//这个地方有记录是第几个blockno的编号
   struct sleeplock lock;
-  uint refcnt;
+  uint refcnt;//有多少个进程使用了这个buf缓冲区
   struct buf *prev; // LRU cache list
   struct buf *next;
   uchar data[BSIZE];

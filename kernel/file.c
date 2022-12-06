@@ -152,16 +152,16 @@ filewrite(struct file *f, uint64 addr, int n)
     // and 2 blocks of slop for non-aligned writes.
     // this really belongs lower down, since writei()
     // might be writing a device like the console.
-    int max = ((MAXOPBLOCKS-1-1-2) / 2) * BSIZE;
+    int max = ((MAXOPBLOCKS-1-1-2) / 2) * BSIZE;//一次能写入的最大的block数
     int i = 0;
     while(i < n){
       int n1 = n - i;
       if(n1 > max)
-        n1 = max;
+        n1 = max;//我们把写入拆分成了许多数量小份的写入 
 
       begin_op();
       ilock(f->ip);
-      if ((r = writei(f->ip, 1, addr + i, f->off, n1)) > 0)
+      if ((r = writei(f->ip, 1, addr + i, f->off, n1)) > 0)//将一个大的文件拆分成很多小份，每个小份都是一个原子的事务
         f->off += r;
       iunlock(f->ip);
       end_op();

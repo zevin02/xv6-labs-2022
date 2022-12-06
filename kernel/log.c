@@ -42,8 +42,8 @@ struct log {
   struct spinlock lock;
   int start;//这个里面记录的就是磁盘中log的开始位置
   int size;
-  int outstanding; // how many FS sys calls are executing.
-  int committing;  // in commit(), please wait.
+  int outstanding; // how many FS sys calls are executing.有多少个文件系统的系统调用正在执行
+  int committing;  // in commit(), please wait.，用来sleep 和wakeup保证只有一个文件系统在执行
   int dev;
   struct logheader lh;
 };
@@ -78,8 +78,8 @@ install_trans(int recovering)
     struct buf *dbuf = bread(log.dev, log.lh.block[tail]); // read dst
     memmove(dbuf->data, lbuf->data, BSIZE);  // copy block to dst
     bwrite(dbuf);  // write dst to disk，同样我们需要的是log buf里的数据，在head里面就是有他要落盘的位置
-    if(recovering == 0)
-      bunpin(dbuf);
+    if(recovering == 0)//已经写入到了log中
+      bunpin(dbuf);//这个地方就把之前的引用给减掉，解除pin状态
     brelse(lbuf);
     brelse(dbuf);
   }
@@ -135,9 +135,12 @@ begin_op(void)
 {
   acquire(&log.lock);
   while(1){
-    if(log.committing){
+    if(log.committing){//如果正在commit，就要等log提交完，因为我们不能在install的过程中写log
+    
       sleep(&log, &log.lock);
     } else if(log.lh.n + (log.outstanding+1)*MAXOPBLOCKS > LOGSIZE){
+      //如果当前操作是允许并发操作的下一个
+      //那么当前操作就可能超过log的大小，
       // this op might exhaust log space; wait for commit.
       sleep(&log, &log.lock);
     } else {
@@ -156,17 +159,17 @@ end_op(void)
   int do_commit = 0;
 
   acquire(&log.lock);
-  log.outstanding -= 1;
-  if(log.committing)
+  log.outstanding -= 1;//结束了事物，就要先对多少个文件系统调用--
+  if(log.committing)//检查是否在commit状态，当前不可能在commit状态因为我们下面才commit，如果在就触发panic
     panic("log.committing");
-  if(log.outstanding == 0){
-    do_commit = 1;
+  if(log.outstanding == 0){//如果但前操作是并发操作的最后一个
+    do_commit = 1;//就会立即执行commit
     log.committing = 1;
   } else {
     // begin_op() may be waiting for log space,
     // and decrementing log.outstanding has decreased
     // the amount of reserved space.
-    wakeup(&log);
+    wakeup(&log);//都不是就会唤醒前面的begin_op
   }
   release(&log.lock);
 

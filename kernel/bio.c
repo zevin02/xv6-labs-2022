@@ -161,7 +161,7 @@ brelse(struct buf *b)
 void
 bpin(struct buf *b) {
   acquire(&bcache.lock);
-  b->refcnt++;
+  b->refcnt++;//这样就可以避免brelse测绘之前的block
   release(&bcache.lock);
 }
 
