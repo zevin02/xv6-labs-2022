@@ -177,12 +177,10 @@ write:33---> update inode x
 >>
 >> 同样我们也不能够删除这个inode，还占用了资源。
 >>
->
 
 ![1670249737822](image/notes/1670249737822.png)
 
 这次我们在32--33之间崩溃
-
 
 如果我们先写入到对应的目录下，在分配inode
 
@@ -191,14 +189,12 @@ write:33---> update inode x
 > 我们会在目录下面读取一个未被分配的inode，(但是这里的write 46是什么意思呢？)
 >
 > **会出现不同的文件贡献一个inode，可能reboot回来之后，我们又write46，这个时候有两个文件，那么可能他们会读取同一个inode，两个文件进行贡献**
->
 
 ![1670251951532](image/notes/1670251951532.png)
 
 这次我们再 45--595之间崩溃
 
 > 这里我们先把 `block bitmap`先分配出来一个 `data block`，但是没有把对应的inode更新他的 `size`和 `block number`，这个 `inode `无法索引到自己的 `block data`
-
 
 ![1670252174104](image/notes/1670252174104.png)
 
@@ -209,11 +205,8 @@ write:33---> update inode x
 > 这里会出现问题，先更新inode，但是我们不知道应该要更新多少大小，以及分配的block number在哪里，因为还没有分配bitmap
 
 > 这是可能认为595是属于x的，但在磁盘上还是属于没有分配的状态，所以，此时崩溃的话，block 595可能会另一个文件给分配走，此时两个文件都认为这个595属于自己，彼此读写互相的数据，
->
-
 
 ## log工作
-
 
 1. log write
 
@@ -233,7 +226,20 @@ write:33---> update inode x
 
 > 清理log区的数据
 
-
 ### xv6的内存磁盘文件结构
 
 ![1670261016793](image/notes/1670261016793.png)
+
+## log磁盘写流程、
+
+![1670295078805](image/notes/1670295078805.png)
+
+> 3,4,5:执行的就是将数据先保存到log data block里面
+
+> 2:将log里面的数据commit，完成所有的操作
+
+> 33,46,32将数据从log data block里面 `install`到实际的data block里面
+
+> 2:将log header记录清空
+
+## file system challenges

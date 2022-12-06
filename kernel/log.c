@@ -35,12 +35,12 @@
 struct logheader {
   //这个就是
   int n;//log里面有多少需要install到对应的block块里面
-  int block[LOGSIZE];//block[0]-block[n]这里面对应的值就是block number
+  int block[LOGSIZE];//block[0]-block[n]这里面对应的值就是block number，所有block的编号都在这个内存数据中
 };
 
 struct log {
   struct spinlock lock;
-  int start;
+  int start;//这个里面记录的就是磁盘中log的开始位置
   int size;
   int outstanding; // how many FS sys calls are executing.
   int committing;  // in commit(), please wait.
@@ -55,11 +55,12 @@ static void commit();
 void
 initlog(int dev, struct superblock *sb)
 {
+  //当crash重启，xv6做的第一件事就是调用initlog
   if (sizeof(struct logheader) >= BSIZE)
     panic("initlog: too big logheader");
 
-  initlock(&log.lock, "log");
-  log.start = sb->logstart;
+  initlock(&log.lock, "log");//初始化锁
+  log.start = sb->logstart;//把log进行初始化
   log.size = sb->nlog;
   log.dev = dev;
   recover_from_log();
@@ -76,7 +77,7 @@ install_trans(int recovering)
     struct buf *lbuf = bread(log.dev, log.start+tail+1); // read log block
     struct buf *dbuf = bread(log.dev, log.lh.block[tail]); // read dst
     memmove(dbuf->data, lbuf->data, BSIZE);  // copy block to dst
-    bwrite(dbuf);  // write dst to disk
+    bwrite(dbuf);  // write dst to disk，同样我们需要的是log buf里的数据，在head里面就是有他要落盘的位置
     if(recovering == 0)
       bunpin(dbuf);
     brelse(lbuf);
@@ -86,9 +87,9 @@ install_trans(int recovering)
 
 // Read the log header from disk into the in-memory log header
 static void
-read_head(void)
+read_head(void)//从磁盘里面把数据读取到内存的log header里面
 {
-  struct buf *buf = bread(log.dev, log.start);
+  struct buf *buf = bread(log.dev, log.start);//已经在磁盘上了
   struct logheader *lh = (struct logheader *) (buf->data);
   int i;
   log.lh.n = lh->n;
@@ -104,6 +105,7 @@ read_head(void)
 static void
 write_head(void)
 {
+  //真正提交事物的地方
   struct buf *buf = bread(log.dev, log.start);
   struct logheader *hb = (struct logheader *) (buf->data);
   int i;
@@ -111,15 +113,18 @@ write_head(void)
   for (i = 0; i < log.lh.n; i++) {
     hb->block[i] = log.lh.block[i];//将所有的block编号拷贝到header列表
   }
+  //如果在之前crash，不会发生什么，因为我们已经把bn0-bnn的数据写入到log磁盘上了，所以不会发生什么
   bwrite(buf);//再将header block写回到磁盘中，
+  //如果这个地方crash了，会读取到磁盘上的log头，那么就会正常的install到磁盘对应的位置上了
+  //所以执行完这一步，就相当于事物完成了，因为已经在磁盘上了，磁盘是持久性的
   brelse(buf);//再把buf给释放掉
 }
 
 static void
 recover_from_log(void)
 {
-  read_head();
-  install_trans(1); // if committed, copy from log to disk
+  read_head();//从磁盘里面读取header
+  install_trans(1); // if committed, copy from log to disk，重新安装
   log.lh.n = 0;
   write_head(); // clear the log
 }
@@ -182,13 +187,13 @@ static void
 write_log(void)
 {
   int tail;
-
+  //log分为两部分，头和后面的block nu以及对应的数据，这里我们是把数据拷贝进去，head还没拷贝
   for (tail = 0; tail < log.lh.n; tail++) {
     //一次遍历内存log中的block，写入到磁盘中的log中
     struct buf *to = bread(log.dev, log.start+tail+1); // log block，从log block里面也读取一个block缓冲区，
     struct buf *from = bread(log.dev, log.lh.block[tail]); // cache block
     memmove(to->data, from->data, BSIZE);//将从block cache里面的数据写道log block里面,这样可以确保写入的都再log里面
-    bwrite(to);  // write the log，将对应的数据写道磁盘里面
+    bwrite(to);  // write the log，将对应的数据写道磁盘里面，to和from最大的不同就是他们在磁盘上的编号不一样，数据都是一样的，保证落盘到disk上的log区
     brelse(from);//
     brelse(to);
   }
