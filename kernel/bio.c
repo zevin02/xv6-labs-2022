@@ -46,7 +46,7 @@ binit(void)
   bcache.head.prev = &bcache.head;
   bcache.head.next = &bcache.head;
   for(b = bcache.buf; b < bcache.buf+NBUF; b++){
-    //对链表进行头插
+    //对链表进行头插,数组但是用链表连接起来了
     b->next = bcache.head.next;
     b->prev = &bcache.head;
     initsleeplock(&b->lock, "buffer");
@@ -92,7 +92,7 @@ bget(uint dev, uint blockno)
     //这样可以满足局部性原理
       b->dev = dev;
       b->blockno = blockno;
-      b->valid = 0;
+      b->valid = 0;//保证了回去回去磁盘里面读取数据
       b->refcnt = 1;
       release(&bcache.lock);
       acquiresleep(&b->lock);//这里同样也是在返回的时候，返回一个带头的节点
@@ -109,10 +109,11 @@ bread(uint dev, uint blockno)//这个read是从内存中获得一个buffer，
   struct buf *b;
   //bget就是在缓冲区高速缓存获取一个插槽
   b = bget(dev, blockno);//bget函数会为我们在buffer cache里面找到block的缓存，这个地方就获取了对应的缓存信息
-  if(!b->valid) {
+  if(!b->valid) {//缓冲区里面没有磁盘的副本，就要从磁盘读取
     virtio_disk_rw(b, 0);
     b->valid = 1;
   }
+  //这里返回的buf都是有磁盘的副本的，需要包含一定的数据，避免进程多次和磁盘进行交互，而避免和cache交互时，cache没有数据
   return b;//返回一个上锁的缓冲区
 }
 
@@ -123,7 +124,7 @@ bwrite(struct buf *b)//将修改后的缓冲区写入到磁盘的相应块里面
   //文件系统中的所有的bwrite都不能直接使用，所有的bwrite都被用log_write进行替代
   if(!holdingsleep(&b->lock))
     panic("bwrite");
-  virtio_disk_rw(b, 1);
+  virtio_disk_rw(b, 1);//写进磁盘
 }
 
 // Release a locked buffer.

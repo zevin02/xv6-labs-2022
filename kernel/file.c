@@ -164,7 +164,7 @@ filewrite(struct file *f, uint64 addr, int n)
       if ((r = writei(f->ip, 1, addr + i, f->off, n1)) > 0)//将一个大的文件拆分成很多小份，每个小份都是一个原子的事务
         f->off += r;
       iunlock(f->ip);
-      end_op();
+      end_op();//一部分一部分都当作是一个事务，把这每个事务进行分别提交
 
       if(r != n1){
         // error from writei

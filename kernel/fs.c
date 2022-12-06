@@ -63,22 +63,27 @@ bzero(int dev, int bno)
 // Allocate a zeroed disk block.
 // returns 0 if out of disk space.
 static uint
-balloc(uint dev)
+balloc(uint dev)//分配一个磁盘块
 {
   int b, bi, m;
   struct buf *bp;
 
   bp = 0;
   for(b = 0; b < sb.size; b += BPB){
-    bp = bread(dev, BBLOCK(b, sb));
+    //查找编号从0-sb.size这么多个编号的文件
+    //从0-sb.size（文件系统的块数）遍历每个块，查找位图中位为0的空闲块
+    //外部循环读取位图中的每一个块
+    bp = bread(dev, BBLOCK(b, sb));//把他弄到bitmap里面对应的位置
     for(bi = 0; bi < BPB && b + bi < sb.size; bi++){
-      m = 1 << (bi % 8);
+      //因为我们一次条BPB这么多个块，所以在里面我们需要精确的检查里面的每个位
+      //内部循环检查单个位图块中的所有BPB位
+      m = 1 << (bi % 8); 
       if((bp->data[bi/8] & m) == 0){  // Is block free?
         bp->data[bi/8] |= m;  // Mark block in use.
         log_write(bp);
         brelse(bp);
-        bzero(dev, b + bi);
-        return b + bi;
+        bzero(dev, b + bi);//把这个块清空
+        return b + bi;//找到这样的块就返回
       }
     }
     brelse(bp);
@@ -89,7 +94,7 @@ balloc(uint dev)
 
 // Free a disk block.
 static void
-bfree(int dev, uint b)
+bfree(int dev, uint b)//释放一个磁盘块
 {
   struct buf *bp;
   int bi, m;
@@ -99,7 +104,7 @@ bfree(int dev, uint b)
   m = 1 << (bi % 8);
   if((bp->data[bi/8] & m) == 0)
     panic("freeing free block");
-  bp->data[bi/8] &= ~m;
+  bp->data[bi/8] &= ~m;//清除这个块
   log_write(bp);
   brelse(bp);
 }

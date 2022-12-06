@@ -33,7 +33,7 @@
 // Contents of the header block, used for both the on-disk header block
 // and to keep track in memory of logged block# before commit.
 struct logheader {
-  //这个就是
+  //这个就是内存里面log的头
   int n;//log里面有多少需要install到对应的block块里面
   int block[LOGSIZE];//block[0]-block[n]这里面对应的值就是block number，所有block的编号都在这个内存数据中
 };
@@ -41,8 +41,8 @@ struct logheader {
 struct log {
   struct spinlock lock;
   int start;//这个里面记录的就是磁盘中log的开始位置
-  int size;
-  int outstanding; // how many FS sys calls are executing.有多少个文件系统的系统调用正在执行
+  int size;//磁盘上log的块大小
+  int outstanding; // how many FS sys calls are executing.有多少个文件系统的系统调用正在执行，统计预定日志空间的系统调用数
   int committing;  // in commit(), please wait.，用来sleep 和wakeup保证只有一个文件系统在执行
   int dev;
   struct logheader lh;
@@ -141,10 +141,11 @@ begin_op(void)
     } else if(log.lh.n + (log.outstanding+1)*MAXOPBLOCKS > LOGSIZE){
       //如果当前操作是允许并发操作的下一个
       //那么当前操作就可能超过log的大小，
+      //等待磁盘上有足够的未占用的日志空间来保存此调用的写入
       // this op might exhaust log space; wait for commit.
       sleep(&log, &log.lock);
     } else {
-      log.outstanding += 1;
+      log.outstanding += 1;//预订空间，防止在次系统调用期间发生提交
       release(&log.lock);
       break;
     }
@@ -164,7 +165,7 @@ end_op(void)
     panic("log.committing");
   if(log.outstanding == 0){//如果但前操作是并发操作的最后一个
     do_commit = 1;//就会立即执行commit
-    log.committing = 1;
+    log.committing = 1;//执行commit操作了
   } else {
     // begin_op() may be waiting for log space,
     // and decrementing log.outstanding has decreased
@@ -179,7 +180,7 @@ end_op(void)
     //欸有其他文件系统正在处理中
     commit();//调用commit将事物提交
     acquire(&log.lock);
-    log.committing = 0;
+    log.committing = 0;//执行完了commit操作，就要唤醒需要执行事务的文件系统
     wakeup(&log);
     release(&log.lock);
   }
@@ -235,9 +236,9 @@ log_write(struct buf *b)
 
   acquire(&log.lock);//这里先获得log headler的锁，避免多个进程同时操作
 
-  if (log.lh.n >= LOGSIZE || log.lh.n >= log.size - 1)
+  if (log.lh.n >= LOGSIZE || log.lh.n >= log.size - 1)//log要提交的事物太大了
     panic("too big a transaction");
-  if (log.outstanding < 1)
+  if (log.outstanding < 1)//没有事物要写，到这里都是要执行写到内存的log上
     panic("log_write outside of trans");
 
   for (i = 0; i < log.lh.n; i++) {
@@ -252,7 +253,13 @@ log_write(struct buf *b)
   
   printf("write: %d\n",b->blockno);
   if (i == log.lh.n) {  // Add new block to log?
-    bpin(b);//将b固定到block cache里面
+    bpin(b);//将b固定到block cache里面，防止block cache将其踢出
+    //固定在block cache是指：缓存不足的时候需要考虑替换，不会将这个block换出
+    //因为事务具有原子性，假设块45被写入，将其患处的话需要写入磁盘中文件系统对应的位置，
+    //而日志系统要全写入到日志，最后才一起写入文件系统
+    //这里就通过增加引用计数防止被换走
+
+
     log.lh.n++;//如果这个i是到最后一个都没有找到这个记录，所以我们就需要增加到这个列表里面，添加headler的数量
   }
   release(&log.lock);
