@@ -242,4 +242,6 @@ write:33---> update inode x
 
 > 2:将log header记录清空
 
+> s
+
 ## file system challenges
