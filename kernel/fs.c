@@ -179,7 +179,7 @@ bfree(int dev, uint b)//释放一个磁盘块
 // read or write that inode's ip->valid, ip->size, ip->type, &c.
 
 struct {
-  struct spinlock lock;
+  struct spinlock lock;//保护inode最多在缓存中出现一次，缓存inode的ref字段记录指向缓存inode的内存指针数量
   struct inode inode[NINODE];
 } itable;
 
@@ -214,13 +214,14 @@ ialloc(uint dev, short type)
     //所以我们就需要有高速缓存buffer cache
     bp = bread(dev, IBLOCK(inum, sb));
     dip = (struct dinode*)bp->data + inum%IPB;//查看对应的inode编号时候被使用了
+    //遍历磁盘上的索引节点结构体
     if(dip->type == 0){  // a free inode
     //没有被使用，我们就把这个inode编号分配给这个文件
       memset(dip, 0, sizeof(*dip));
       dip->type = type;//设置他的文件类型
       log_write(bp);   // mark it allocated on the disk，把他标记为已分配，并把他写入到磁盘里面
       brelse(bp);
-      return iget(dev, inum);
+      return iget(dev, inum);//从inode缓存返回一个条目
     }
     brelse(bp);
   }
@@ -235,6 +236,7 @@ ialloc(uint dev, short type)
 void
 iupdate(struct inode *ip)
 {
+  //修改已经缓存了inode的代码比米立即调用iupdate将其写入磁盘
   struct buf *bp;
   struct dinode *dip;
 
@@ -254,8 +256,9 @@ iupdate(struct inode *ip)
 // and return the in-memory copy. Does not lock
 // the inode and does not read it from disk.
 static struct inode*
-iget(uint dev, uint inum)
+iget(uint dev, uint inum)//获取只想inode的指针
 {
+  //保证了对inode非独占试访问，因此可以有许多指向同一个inode的指针
   struct inode *ip, *empty;
 
   acquire(&itable.lock);
@@ -302,6 +305,7 @@ idup(struct inode *ip)
 void
 ilock(struct inode *ip)
 {
+  //为了确保inode保存磁盘inode的副本，锁定inode（以便没有其他进程可以对其进行ilock），并从磁盘读取尚未读取的inode
   struct buf *bp;
   struct dinode *dip;
 
@@ -310,9 +314,9 @@ ilock(struct inode *ip)
 
   acquiresleep(&ip->lock);
 
-  if(ip->valid == 0){
+  if(ip->valid == 0){//如果没有从磁盘读取处数据
     bp = bread(ip->dev, IBLOCK(ip->inum, sb));
-    dip = (struct dinode*)bp->data + ip->inum%IPB;
+    dip = (struct dinode*)bp->data + ip->inum%IPB;//把磁盘上的inode块拷贝到内存中的inode块
     ip->type = dip->type;
     ip->major = dip->major;
     ip->minor = dip->minor;
@@ -333,7 +337,7 @@ iunlock(struct inode *ip)
   if(ip == 0 || !holdingsleep(&ip->lock) || ip->ref < 1)
     panic("iunlock");
 
-  releasesleep(&ip->lock);
+  releasesleep(&ip->lock);//解锁
 }
 
 // Drop a reference to an in-memory inode.
@@ -344,7 +348,7 @@ iunlock(struct inode *ip)
 // All calls to iput() must be inside a transaction in
 // case it has to free the inode.
 void
-iput(struct inode *ip)
+iput(struct inode *ip)//释放指向inode的指针
 {
   acquire(&itable.lock);
 
@@ -357,9 +361,9 @@ iput(struct inode *ip)
 
     release(&itable.lock);
 
-    itrunc(ip);
+    itrunc(ip);//将文件截断为0字节，释放数据块
     ip->type = 0;
-    iupdate(ip);
+    iupdate(ip);//将修改之后的inode写入到磁盘
     ip->valid = 0;
 
     releasesleep(&ip->lock);
@@ -367,7 +371,7 @@ iput(struct inode *ip)
     acquire(&itable.lock);
   }
 
-  ip->ref--;
+  ip->ref--;//减少引用计数来释放指向inode的C指针
   release(&itable.lock);
 }
 
@@ -397,7 +401,8 @@ bmap(struct inode *ip, uint bn)
 
   if(bn < NDIRECT){
     if((addr = ip->addrs[bn]) == 0){
-      addr = balloc(ip->dev);
+      //如果对应的bn上没有数据，表示未分配块
+      addr = balloc(ip->dev);//按需分配新块替换他们
       if(addr == 0)
         return 0;
       ip->addrs[bn] = addr;
@@ -427,7 +432,7 @@ bmap(struct inode *ip, uint bn)
     return addr;
   }
 
-  panic("bmap: out of range");
+  panic("bmap: out of range");//块号超过ndirect+nindirect就会崩溃
 }
 
 // Truncate inode (discard contents).
@@ -435,11 +440,13 @@ bmap(struct inode *ip, uint bn)
 void
 itrunc(struct inode *ip)
 {
+  //释放块
   int i, j;
   struct buf *bp;
   uint *a;
 
   for(i = 0; i < NDIRECT; i++){
+    //先释放直接块
     if(ip->addrs[i]){
       bfree(ip->dev, ip->addrs[i]);
       ip->addrs[i] = 0;
@@ -451,10 +458,10 @@ itrunc(struct inode *ip)
     a = (uint*)bp->data;
     for(j = 0; j < NINDIRECT; j++){
       if(a[j])
-        bfree(ip->dev, a[j]);
+        bfree(ip->dev, a[j]);//释放间接块中列出来的每个块
     }
     brelse(bp);
-    bfree(ip->dev, ip->addrs[NDIRECT]);
+    bfree(ip->dev, ip->addrs[NDIRECT]);//最后释放间接块本身
     ip->addrs[NDIRECT] = 0;
   }
 
@@ -465,7 +472,7 @@ itrunc(struct inode *ip)
 // Copy stat information from inode.
 // Caller must hold ip->lock.
 void
-stati(struct inode *ip, struct stat *st)
+stati(struct inode *ip, struct stat *st)//将inode的元数据拷贝到stat结构体中，该结构体通过stat系统调用展示
 {
   st->dev = ip->dev;
   st->ino = ip->inum;
@@ -484,18 +491,20 @@ readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
   uint tot, m;
   struct buf *bp;
 
-  if(off > ip->size || off + n < off)
-    return 0;
+  if(off > ip->size || off + n < off)//确保偏移量和计数不超过文件末尾
+    return 0;//超过末尾的地方将返回错误
   if(off + n > ip->size)
     n = ip->size - off;
 
   for(tot=0; tot<n; tot+=m, off+=m, dst+=m){
+    //主循环处理文件的每个块
     uint addr = bmap(ip, off/BSIZE);
     if(addr == 0)
       break;
     bp = bread(ip->dev, addr);
     m = min(n - tot, BSIZE - off%BSIZE);
     if(either_copyout(user_dst, dst, bp->data + (off % BSIZE), m) == -1) {
+      //将数据从缓冲区拷贝到dst
       brelse(bp);
       tot = -1;
       break;
@@ -561,10 +570,11 @@ namecmp(const char *s, const char *t)
 struct inode*
 dirlookup(struct inode *dp, char *name, uint *poff)
 {
+  //在目录中查询具有给定名字的条目
   uint off, inum;
   struct dirent de;
 
-  if(dp->type != T_DIR)
+  if(dp->type != T_DIR)//查找的条目必须是一个目录
     panic("dirlookup not DIR");
 
   for(off = 0; off < dp->size; off += sizeof(de)){
@@ -575,9 +585,9 @@ dirlookup(struct inode *dp, char *name, uint *poff)
     if(namecmp(name, de.name) == 0){
       // entry matches path element
       if(poff)
-        *poff = off;
+        *poff = off;//找到了设置为目录中条目的字节偏移量
       inum = de.inum;
-      return iget(dp->dev, inum);
+      return iget(dp->dev, inum);//返回对应的inode
     }
   }
 
@@ -589,27 +599,28 @@ dirlookup(struct inode *dp, char *name, uint *poff)
 int
 dirlink(struct inode *dp, char *name, uint inum)
 {
+  //将给定名称和inode编号的新目录条目写入到目录dp中，
   int off;
   struct dirent de;
   struct inode *ip;
 
   // Check that name is not present.
-  if((ip = dirlookup(dp, name, 0)) != 0){
+  if((ip = dirlookup(dp, name, 0)) != 0){//如果已经存在了就返回错误
     iput(ip);
     return -1;
   }
 
-  // Look for an empty dirent.
+  // Look for an empty dirent.查找空目录
   for(off = 0; off < dp->size; off += sizeof(de)){
     if(readi(dp, 0, (uint64)&de, off, sizeof(de)) != sizeof(de))
       panic("dirlink read");
-    if(de.inum == 0)
+    if(de.inum == 0)//找到了一个为分配的条目，就停止循环
       break;
   }
 
   strncpy(de.name, name, DIRSIZ);
   de.inum = inum;
-  if(writei(dp, 0, (uint64)&de, off, sizeof(de)) != sizeof(de))
+  if(writei(dp, 0, (uint64)&de, off, sizeof(de)) != sizeof(de))//向目录添加一个新条目
     return -1;
 
   return 0;
@@ -662,29 +673,29 @@ static struct inode*
 namex(char *path, int nameiparent, char *name)
 {
   struct inode *ip, *next;
-
+  //首先决定路径计算的开始位置
   if(*path == '/')
-    ip = iget(ROOTDEV, ROOTINO);
+    ip = iget(ROOTDEV, ROOTINO);//计算从根目录开始
   else
-    ip = idup(myproc()->cwd);
+    ip = idup(myproc()->cwd);//当前目录开始计算
 
-  while((path = skipelem(path, name)) != 0){
-    ilock(ip);
-    if(ip->type != T_DIR){
+  while((path = skipelem(path, name)) != 0){//依次考察路径的每个元素
+    ilock(ip);//首先给ip上锁
+    if(ip->type != T_DIR){//检查是不是一个目录
       iunlockput(ip);
       return 0;
     }
     if(nameiparent && *path == '\0'){
       // Stop one level early.
-      iunlock(ip);
-      return ip;
+      iunlock(ip);//解锁，直接返回
+      return ip;//返回的是解锁的ip
     }
-    if((next = dirlookup(ip, name, 0)) == 0){
+    if((next = dirlookup(ip, name, 0)) == 0){//查找路径元素
       iunlockput(ip);
       return 0;
     }
     iunlockput(ip);
-    ip = next;
+    ip = next;//为下次迭代做准备
   }
   if(nameiparent){
     iput(ip);
@@ -692,16 +703,16 @@ namex(char *path, int nameiparent, char *name)
   }
   return ip;
 }
-
+//路径名查询
 struct inode*
-namei(char *path)
+namei(char *path)//计算path并返回对应的inode
 {
   char name[DIRSIZ];
   return namex(path, 0, name);
 }
 
 struct inode*
-nameiparent(char *path, char *name)
+nameiparent(char *path, char *name)//在最后一个元素之前停止，返回父目录的inode，将最后一个元素复制到name中
 {
   return namex(path, 1, name);
 }

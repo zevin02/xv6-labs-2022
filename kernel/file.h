@@ -1,11 +1,12 @@
-struct file {
+struct file {//每个打开的文件都由这个结构表示
+//他是管道或者inode的封装
   enum { FD_NONE, FD_PIPE, FD_INODE, FD_DEVICE } type;
   int ref; // reference count
   char readable;
   char writable;
   struct pipe *pipe; // FD_PIPE
   struct inode *ip;  // FD_INODE and FD_DEVICE
-  uint off;          // FD_INODE
+  uint off;          // FD_INODE，IO偏移量，多个进程独立的打开同一个文件，不同的实例会有不同的偏移量
   short major;       // FD_DEVICE
 };
 
@@ -14,11 +15,15 @@ struct file {
 #define	mkdev(m,n)  ((uint)((m)<<16| (n)))
 
 // in-memory copy of an inode
+//内核将活动的inode集合保存在内存中
+//是磁盘上dinode的副本
+//当c指针引用某个inode的时候，才会在内存中存储该inode
 struct inode {
+  //指向inode指针可以来自文件描述符，当前工作目录，exec的瞬态内核代码
   uint dev;           // Device number
-  uint inum;          // Inode number
-  int ref;            // Reference count
-  struct sleeplock lock; // protects everything below here
+  uint inum;          // Inode number ，inode编号
+  int ref;            // Reference count，引用内存中inode的数量，为0时就舍弃这个inode
+  struct sleeplock lock; // protects everything below here，保护当前inode的睡眠锁，因为时磁盘操作比较慢，所以使用睡眠锁
   int valid;          // inode has been read from disk?
 
   short type;         // copy of disk inode

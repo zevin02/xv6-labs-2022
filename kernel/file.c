@@ -17,7 +17,7 @@ struct devsw devsw[NDEV];
 struct {
   struct spinlock lock;
   struct file file[NFILE];
-} ftable;
+} ftable;//所有打开的文件都保存在全局文件表里面
 
 void
 fileinit(void)
@@ -27,7 +27,7 @@ fileinit(void)
 
 // Allocate a file structure.
 struct file*
-filealloc(void)
+filealloc(void)//分配文件
 {
   struct file *f;
 
@@ -45,7 +45,7 @@ filealloc(void)
 
 // Increment ref count for file f.
 struct file*
-filedup(struct file *f)
+filedup(struct file *f)//创建重复文件
 {
   acquire(&ftable.lock);
   if(f->ref < 1)
@@ -64,7 +64,7 @@ fileclose(struct file *f)
   acquire(&ftable.lock);
   if(f->ref < 1)
     panic("fileclose");
-  if(--f->ref > 0){
+  if(--f->ref > 0){//减少引用计数
     release(&ftable.lock);
     return;
   }
@@ -73,7 +73,7 @@ fileclose(struct file *f)
   f->type = FD_NONE;
   release(&ftable.lock);
 
-  if(ff.type == FD_PIPE){
+  if(ff.type == FD_PIPE){//根据type释放地层的管道或者inode
     pipeclose(ff.pipe, ff.writable);
   } else if(ff.type == FD_INODE || ff.type == FD_DEVICE){
     begin_op();
@@ -85,14 +85,14 @@ fileclose(struct file *f)
 // Get metadata about file f.
 // addr is a user virtual address, pointing to a struct stat.
 int
-filestat(struct file *f, uint64 addr)
+filestat(struct file *f, uint64 addr)//文件的stat
 {
   struct proc *p = myproc();
   struct stat st;
   
   if(f->type == FD_INODE || f->type == FD_DEVICE){
     ilock(f->ip);
-    stati(f->ip, &st);
+    stati(f->ip, &st);//只允许在inode上使用stati
     iunlock(f->ip);
     if(copyout(p->pagetable, addr, (char *)&st, sizeof(st)) < 0)
       return -1;
@@ -104,13 +104,13 @@ filestat(struct file *f, uint64 addr)
 // Read from file f.
 // addr is a user virtual address.
 int
-fileread(struct file *f, uint64 addr, int n)
+fileread(struct file *f, uint64 addr, int n)//读取
 {
   int r = 0;
 
-  if(f->readable == 0)
+  if(f->readable == 0)//检查打开模式是否允许该操作
     return -1;
-
+  //然后将调用传递给inode或者管道的实现
   if(f->type == FD_PIPE){
     r = piperead(f->pipe, addr, n);
   } else if(f->type == FD_DEVICE){
@@ -132,7 +132,7 @@ fileread(struct file *f, uint64 addr, int n)
 // Write to file f.
 // addr is a user virtual address.
 int
-filewrite(struct file *f, uint64 addr, int n)
+filewrite(struct file *f, uint64 addr, int n)//写入
 {
   int r, ret = 0;
 

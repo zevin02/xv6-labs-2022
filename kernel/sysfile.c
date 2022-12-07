@@ -121,7 +121,7 @@ sys_fstat(void)
 
 // Create the path new as a link to the same inode as old.
 uint64
-sys_link(void)
+sys_link(void)//编辑目录，创建或删除索引界点的引用，为现有的inode创建一个新名称
 {
   char name[DIRSIZ], new[MAXPATH], old[MAXPATH];
   struct inode *dp, *ip;
@@ -130,7 +130,7 @@ sys_link(void)
     return -1;
 
   begin_op();
-  if((ip = namei(old)) == 0){
+  if((ip = namei(old)) == 0){//old存在但不是一个目录
     end_op();
     return -1;
   }
@@ -142,14 +142,14 @@ sys_link(void)
     return -1;
   }
 
-  ip->nlink++;
+  ip->nlink++;//增加计数
   iupdate(ip);
   iunlock(ip);
 
-  if((dp = nameiparent(new, name)) == 0)
+  if((dp = nameiparent(new, name)) == 0)//查找new的父目录，和最终路径元素
     goto bad;
   ilock(dp);
-  if(dp->dev != ip->dev || dirlink(dp, name, ip->inum) < 0){
+  if(dp->dev != ip->dev || dirlink(dp, name, ip->inum) < 0){//new的父母路必须存在并且与现有的inode位于同一设备上
     iunlockput(dp);
     goto bad;
   }
@@ -248,7 +248,7 @@ create(char *path, short type, short major, short minor)
   struct inode *ip, *dp;
   char name[DIRSIZ];
 
-  if((dp = nameiparent(path, name)) == 0)
+  if((dp = nameiparent(path, name)) == 0)//获取父目录的inode
     return 0;
 
   ilock(dp);
@@ -280,7 +280,7 @@ create(char *path, short type, short major, short minor)
       goto fail;
   }
 
-  if(dirlink(dp, name, ip->inum) < 0)
+  if(dirlink(dp, name, ip->inum) < 0)//连接到父目录
     goto fail;
 
   if(type == T_DIR){
