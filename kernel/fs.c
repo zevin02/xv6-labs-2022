@@ -63,7 +63,7 @@ bzero(int dev, int bno)
 // Allocate a zeroed disk block.
 // returns 0 if out of disk space.
 static uint
-balloc(uint dev)//分配一个磁盘块
+balloc(uint dev)//找到一个空的块数字，并返回
 {
   int b, bi, m;
   struct buf *bp;
@@ -73,11 +73,11 @@ balloc(uint dev)//分配一个磁盘块
     //查找编号从0-sb.size这么多个编号的文件
     //从0-sb.size（文件系统的块数）遍历每个块，查找位图中位为0的空闲块
     //外部循环读取位图中的每一个块
-    bp = bread(dev, BBLOCK(b, sb));//把他弄到bitmap里面对应的位置
+    bp = bread(dev, BBLOCK(b, sb));//把磁盘中的一个bitmap块全部读出来
     for(bi = 0; bi < BPB && b + bi < sb.size; bi++){
       //因为我们一次条BPB这么多个块，所以在里面我们需要精确的检查里面的每个位
       //内部循环检查单个位图块中的所有BPB位
-      m = 1 << (bi % 8); 
+      m = 1 << (bi % 8);
       if((bp->data[bi/8] & m) == 0){  // Is block free?
         bp->data[bi/8] |= m;  // Mark block in use.
         log_write(bp);
@@ -201,7 +201,7 @@ static struct inode* iget(uint dev, uint inum);
 // Returns an unlocked but allocated and referenced inode,
 // or NULL if there is no free inode.
 struct inode*
-ialloc(uint dev, short type)
+ialloc(uint dev, short type)//分配一个inode指针，有数据
 {
   //为一个文件分配一个inode
   int inum;
@@ -217,7 +217,7 @@ ialloc(uint dev, short type)
     //遍历磁盘上的索引节点结构体
     if(dip->type == 0){  // a free inode
     //没有被使用，我们就把这个inode编号分配给这个文件
-      memset(dip, 0, sizeof(*dip));
+      memset(dip, 0, sizeof(*dip));//sizeof(*dip)计算的就是这个结构体的大小
       dip->type = type;//设置他的文件类型
       log_write(bp);   // mark it allocated on the disk，把他标记为已分配，并把他写入到磁盘里面
       brelse(bp);
@@ -256,7 +256,7 @@ iupdate(struct inode *ip)
 // and return the in-memory copy. Does not lock
 // the inode and does not read it from disk.
 static struct inode*
-iget(uint dev, uint inum)//获取只想inode的指针
+iget(uint dev, uint inum)//获取只想inode的指针，没有数据
 {
   //保证了对inode非独占试访问，因此可以有许多指向同一个inode的指针
   struct inode *ip, *empty;
@@ -278,7 +278,7 @@ iget(uint dev, uint inum)//获取只想inode的指针
   // Recycle an inode entry.
   if(empty == 0)
     panic("iget: no inodes");
-
+  //这个地方的ip就是扫描了所有的slot之后的第一个非存在的空slot
   ip = empty;
   ip->dev = dev;
   ip->inum = inum;
@@ -303,7 +303,7 @@ idup(struct inode *ip)
 // Lock the given inode.
 // Reads the inode from disk if necessary.
 void
-ilock(struct inode *ip)
+ilock(struct inode *ip)//给inode加锁
 {
   //为了确保inode保存磁盘inode的副本，锁定inode（以便没有其他进程可以对其进行ilock），并从磁盘读取尚未读取的inode
   struct buf *bp;
@@ -312,7 +312,7 @@ ilock(struct inode *ip)
   if(ip == 0 || ip->ref < 1)
     panic("ilock");
 
-  acquiresleep(&ip->lock);
+  acquiresleep(&ip->lock);//把给定的inode给锁住，保证独占这个inode
 
   if(ip->valid == 0){//如果没有从磁盘读取处数据
     bp = bread(ip->dev, IBLOCK(ip->inum, sb));
@@ -332,7 +332,7 @@ ilock(struct inode *ip)
 
 // Unlock the given inode.
 void
-iunlock(struct inode *ip)
+iunlock(struct inode *ip)//解锁inode
 {
   if(ip == 0 || !holdingsleep(&ip->lock) || ip->ref < 1)
     panic("iunlock");
@@ -394,7 +394,7 @@ iunlockput(struct inode *ip)
 // If there is no such block, bmap allocates one.
 // returns 0 if out of disk space.
 static uint
-bmap(struct inode *ip, uint bn)
+bmap(struct inode *ip, uint bn)//返回bn对应的data block number，bn是第几块
 {
   uint addr, *a;
   struct buf *bp;
@@ -486,7 +486,7 @@ stati(struct inode *ip, struct stat *st)//将inode的元数据拷贝到stat结�
 // If user_dst==1, then dst is a user virtual address;
 // otherwise, dst is a kernel address.
 int
-readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
+readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)//从inode里面读取数据
 {
   uint tot, m;
   struct buf *bp;
@@ -538,7 +538,7 @@ writei(struct inode *ip, int user_src, uint64 src, uint off, uint n)
       break;
     bp = bread(ip->dev, addr);
     m = min(n - tot, BSIZE - off%BSIZE);
-    if(either_copyin(bp->data + (off % BSIZE), user_src, src, m) == -1) {
+    if(either_copyin(bp->data + (off % BSIZE), user_src, src, m) == -1) {//把数据从src拷贝到bp->data中
       brelse(bp);
       break;
     }

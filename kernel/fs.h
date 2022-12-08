@@ -20,7 +20,7 @@ struct superblock {
   uint nlog;         // Number of log blocks
   uint logstart;     // Block number of first log block
   uint inodestart;   // Block number of first inode block
-  uint bmapstart;    // Block number of first free map block
+  uint bmapstart;    // Block number of first free map block bitmap块的位置
 };
 
 #define FSMAGIC 0x10203040

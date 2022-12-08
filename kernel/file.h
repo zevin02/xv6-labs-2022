@@ -22,7 +22,7 @@ struct inode {
   //指向inode指针可以来自文件描述符，当前工作目录，exec的瞬态内核代码
   uint dev;           // Device number
   uint inum;          // Inode number ，inode编号
-  int ref;            // Reference count，引用内存中inode的数量，为0时就舍弃这个inode
+  int ref;            // Reference count，内存中有多少个指针指向这个inode，设置后避免被在itable中被替换
   struct sleeplock lock; // protects everything below here，保护当前inode的睡眠锁，因为时磁盘操作比较慢，所以使用睡眠锁
   int valid;          // inode has been read from disk?
 

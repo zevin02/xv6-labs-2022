@@ -122,7 +122,7 @@ void
 bwrite(struct buf *b)//将修改后的缓冲区写入到磁盘的相应块里面
 {
   //文件系统中的所有的bwrite都不能直接使用，所有的bwrite都被用log_write进行替代
-  if(!holdingsleep(&b->lock))
+  if(!holdingsleep(&b->lock))//必须保证操作是持有锁的，否则直接panic
     panic("bwrite");
   virtio_disk_rw(b, 1);//写进磁盘
 }
