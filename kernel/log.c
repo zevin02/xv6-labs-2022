@@ -78,8 +78,8 @@ install_trans(int recovering)
     struct buf *dbuf = bread(log.dev, log.lh.block[tail]); // read dst
     memmove(dbuf->data, lbuf->data, BSIZE);  // copy block to dst
     bwrite(dbuf);  // write dst to disk，同样我们需要的是log buf里的数据，在head里面就是有他要落盘的位置
-    if(recovering == 0)//已经写入到了log中
-      bunpin(dbuf);//这个地方就把之前的引用给减掉，解除pin状态
+    if(recovering == 0)//已经写入到了log中，和前面的write_log对应起来
+      bunpin(dbuf);//这个地方就把之前的引用给减掉，解除pin状态，因为我们每次添加新的log块都增加了buf引用计数
     brelse(lbuf);
     brelse(dbuf);
   }
@@ -89,10 +89,10 @@ install_trans(int recovering)
 static void
 read_head(void)//从磁盘里面把数据读取到内存的log header里面
 {
-  struct buf *buf = bread(log.dev, log.start);//已经在磁盘上了
+  struct buf *buf = bread(log.dev, log.start);//已经在磁盘上了，所以现在读取磁盘弄到缓冲区是有数据的
   struct logheader *lh = (struct logheader *) (buf->data);
   int i;
-  log.lh.n = lh->n;
+  log.lh.n = lh->n;//更新内存中的head头
   for (i = 0; i < log.lh.n; i++) {
     log.lh.block[i] = lh->block[i];
   }
@@ -106,8 +106,9 @@ static void
 write_head(void)
 {
   //真正提交事物的地方
-  struct buf *buf = bread(log.dev, log.start);
-  struct logheader *hb = (struct logheader *) (buf->data);
+  struct buf *buf = bread(log.dev, log.start);//这个地方读上来的是块除了属性什么数据也没有
+  struct logheader *hb = (struct logheader *) (buf->data);//强制类型转换之后用一个变量接收，同样可以影响到原来的值
+  //所以这里修改了hb是可以影响到buf的内容
   int i;
   hb->n = log.lh.n;//将n拷贝到block中
   for (i = 0; i < log.lh.n; i++) {
@@ -115,6 +116,7 @@ write_head(void)
   }
   //如果在之前crash，不会发生什么，因为我们已经把bn0-bnn的数据写入到log磁盘上了，所以不会发生什么
   bwrite(buf);//再将header block写回到磁盘中，
+  //如果logheader=0,那么就直接会把对应的header块清空
   //如果这个地方crash了，会读取到磁盘上的log头，那么就会正常的install到磁盘对应的位置上了
   //所以执行完这一步，就相当于事物完成了，因为已经在磁盘上了，磁盘是持久性的
   brelse(buf);//再把buf给释放掉

@@ -16,7 +16,7 @@ struct superblock {
   uint magic;        // Must be FSMAGIC
   uint size;         // Size of file system image (blocks)
   uint nblocks;      // Number of data blocks
-  uint ninodes;      // Number of inodes.inode块的数量
+  uint ninodes;      // Number of inodes.  inode number
   uint nlog;         // Number of log blocks
   uint logstart;     // Block number of first log block
   uint inodestart;   // Block number of first inode block
@@ -45,11 +45,12 @@ struct dinode {
 #define IPB           (BSIZE / sizeof(struct dinode))
 
 // Block containing inode i
-#define IBLOCK(i, sb)     ((i) / IPB + sb.inodestart)//计算在磁盘中的inode块的位置
+//i就是inode number
+#define IBLOCK(i, sb)     ((i) / IPB + sb.inodestart)//通过inode number计算出他在磁盘上的哪个位置（block number）
 
 // Bitmap bits per block
 #define BPB           (BSIZE*8)//一个块1024个字节，每个字节8个bit位，有这么多个状态
-
+ 
 // Block of free map containing bit for block b
 #define BBLOCK(b, sb) ((b)/BPB + sb.bmapstart)
 
@@ -57,7 +58,8 @@ struct dinode {
 #define DIRSIZ 14
 
 struct dirent {//目录层的每个条目都是一个这个结构
-  ushort inum;//inode编号，inum=0说明这个条目是空的，不存在
-  char name[DIRSIZ];//目录的名字
+//一个目录16字节
+  ushort inum;//inode编号，inum=0说明这个条目是空的，不存在，2个字节的的inode编号
+  char name[DIRSIZ];//目录的名字，以及14个字节的名字
 };
 

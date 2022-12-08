@@ -28,7 +28,7 @@ acquiresleep(struct sleeplock *lk)
   while (lk->locked) {//如果这个sleep lock已经被持有了
     sleep(lk, &lk->lk);//进入sleep状态，并把打开中断，释放这个自旋锁，并把自己这个进程调度走
   }
-  lk->locked = 1;//走到这锁名，已经有人释放了锁，所以我们就能获取锁
+  lk->locked = 1;//走到这锁名，已经有人释放了锁，所以我们就能获取锁 
   lk->pid = myproc()->pid;//同时标注是哪个进程持有的这个sleep lock
   release(&lk->lk);//释放自旋锁，因为上面的操作都必须要保证他是原子性的
 }
