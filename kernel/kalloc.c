@@ -8,7 +8,6 @@
 #include "spinlock.h"
 #include "riscv.h"
 #include "defs.h"
-
 void freerange(void *pa_start, void *pa_end);
 
 extern char end[]; // first address after kernel.
@@ -28,7 +27,7 @@ struct
 struct
 {
   struct spinlock lock;
-  int refcnt[PHYSTOP / PGSIZE];
+  int refcnt[PHYSTOP / PGSIZE];//每个物理地址都是PGSIZE对齐
 } ref;
 void kinit()
 {
@@ -135,7 +134,7 @@ int cowalloc(pagetable_t pagetable, uint64 va) //为page fault的虚拟地址进
   uint64 pa = PTE2PA(*pte);
   if (((uint64)pa % PGSIZE) != 0 || (char *)pa < end || (uint64)pa >= PHYSTOP) //所有的物理地址大小都是4096字节，对齐，end是内核物理地址的最底段，PHYSTOP是内核物理地址的最顶端
     panic("cowalloc");
-  if (ref.refcnt[(uint64)pa / PGSIZE] == 1)
+  if (ref.refcnt[(uint64)pa / PGSIZE] == 1)//引用计数为1的话，就说明已经没有人使用该page了，就可以直接使用了
   {
     *pte |= PTE_W;
     *pte &= ~PTE_COW;

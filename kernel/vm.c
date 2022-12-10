@@ -318,8 +318,8 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)//将两个pagetable进行�
       panic("uvmcopy: pte should exist");
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
-    *pte&=(~PTE_W);//把w权限给取消掉
-    *pte|=PTE_COW;//设置为cow页
+    *pte&=(~PTE_W);//把w权限给取消掉，这个操作会同时影响父子进程
+    *pte|=PTE_COW;//设置为cow页,这个操作并不会影响其父进程
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
     // if((mem = kalloc()) == 0)
@@ -333,7 +333,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)//将两个pagetable进行�
     }
     else
     {
-      refadd(pa);//添加印社
+      refadd(pa);//添加引用计数
     }
   }
   return 0;
