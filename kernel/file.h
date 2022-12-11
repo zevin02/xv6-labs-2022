@@ -31,7 +31,7 @@ struct inode {
   short minor;
   short nlink;        //link计数器，跟踪当前inode被多少个文件名指向
   uint size;          //表明了文件数据有多少字节
-  uint addrs[NDIRECT+1];
+  uint addrs[NSINGLEINDIRECT+1];
   //这个地方的addrs，就是用来索引block number，通过block number可以索引到对应的数据
   /*
   1. 有12个direct block number，通过这12个direct number，我们可以直接索引到blcok number对应的数据块内容

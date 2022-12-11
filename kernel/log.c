@@ -253,7 +253,7 @@ log_write(struct buf *b)
   //如果原本已经记录过了的话，那这一行就没有起作用
   log.lh.block[i] = b->blockno;//将这个编号写到对应的handler
   
-  printf("write: %d\n",b->blockno);
+  // printf("write: %d\n",b->blockno);
   if (i == log.lh.n) {  // Add new block to log?
     bpin(b);//将b固定到block cache里面，防止block cache将其踢出
     //固定在block cache是指：缓存不足的时候需要考虑替换，不会将这个block换出
