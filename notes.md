@@ -50,7 +50,7 @@ int main(int argc, char* argv[])
   * MAP_SHARD:写入映射区的数据会复制回文件，和其他映射文件的进程共享，多个进程可以共享
   * MAP_PRIVATE:对映射区的写入操作会产生一个映射区的复制，对此区域的修改不会写会原文件
 * fd：要映射到内存中的文件描述符，有open函数打开文件时返回的值
-* offset：文件映射的偏移量，通常设置为0，代表从文件最前方开始对应，offset必须是分页大小的整数倍。
+* offset：文件映射的偏移量，通常设置为0，代表从文件最前方开始对应，offset必须是分页大小（4K）的整数倍。
 
 函数的返回值
 
@@ -64,9 +64,33 @@ int main(int argc, char* argv[])
 
 解除映射之后，对原来映射地址的访问会导致段错误
 
+# 传统读写文件
+
+* 把文件内容读入到内存中,从内核态拷贝回用户态，获得对应文件的数据。
+* 用户态修改文件相应的内容。
+* 把修改过的数据从用户态拷贝回内核态文件中。
+
+![](https://cdn.jsdelivr.net/gh/zevin02/picb@master/imgss/20221213010704.png)
+
+```c
+read(fd, buf, 1024);  // 读取文件的内容到buf
+...                   // 修改buf的内容
+write(fd, buf, 1024); // 把buf的内容写入到文件
+```
+
+
+其中，（页缓存） `page cache`类似inode cache，把磁盘中的数据缓存在内存中，减少和磁盘进行交互,提高效率，内核使用page cache 将文件的数据块关联起来，所以我们在读写文件的时候，实际上操作的是 `page cache`
+
+
 # mmap 原理
 
 ![](https://cdn.jsdelivr.net/gh/zevin02/picb@master/imgss/20221212235155.png)
+
+![](https://cdn.jsdelivr.net/gh/zevin02/picb@master/imgss/20221213011220.png)
+
+与传统读写文件相比，mmap就是可以直接在用户空间读写 `page cache`，这样就可以免去将page cache的数据在内核与用户之间的拷贝，mmap映射的正是文件的page cache，而非磁盘
+
+
 
 `mmap `将文件映射到进程的虚拟内存空间中，通过对这段内存的 `lord `和 `store `，实现对文件的读取和修改，不使用 `read `和 `write`
 
@@ -80,7 +104,6 @@ off为映射的部分在文件中的偏移量，len为映射的长度
 
 > 对于文件的读写，内核会从文件的offset开始，将数据拷贝到内核中，设置好PTE指向物理内存的位置，后程序就可以使用load或者store来修改内存中文件的内容，完成后，使用unmmap，将dirty block写回文件中，我们可以很容易找到哪个block是dirty，因为对应的PTE_D被设置了
 
-
 > 但是现在的计算机都不会这样做，都是以 `lazy`的方式实现
 >
 > * 记录这个PTE属于这个文件描述符
@@ -90,3 +113,11 @@ off为映射的部分在文件中的偏移量，len为映射的长度
 > * 获得VMA范围的page fault，内核从磁盘读数据，加载到内存
 
 如果其他进程直接修改了文件的内容，内容不会出现在内存中，
+
+
+mmap并不会主动将 `mmap`修改的page cache `同步`到磁盘，而是需要用户进行触发
+
+* munmap解除文件映射的时候会触发
+* msync函数主动进行数据同步
+* 进程退出
+* 系统关机
