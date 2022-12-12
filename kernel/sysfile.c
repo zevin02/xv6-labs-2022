@@ -260,7 +260,7 @@ create(char *path, short type, short major, short minor)
     if(type == T_FILE && (ip->type == T_FILE || ip->type == T_DEVICE))
       return ip;
     iunlockput(ip);
-    return 0;
+    return 0;//0表示已经存在了
   }
   //我们想要创建的文件名并不存在，那么我们在文件系统上就要进行为文件分配inode
   if((ip = ialloc(dp->dev, type)) == 0){//调用ialloc为文件分配一个inode
@@ -314,6 +314,7 @@ sys_open(void)
   struct file *f;
   struct inode *ip;
   int n;
+  int threshold=0;
 
   argint(1, &omode);
   if((n = argstr(0, path, MAXPATH)) < 0)
@@ -328,11 +329,38 @@ sys_open(void)
       return -1;
     }
   } else {
-    if((ip = namei(path)) == 0){
-      end_op();
-      return -1;
+    while(1)//如果没有这个标志位，打开的就是他对应的文件
+    {
+      if((ip = namei(path)) == 0){//获得最后一个的inode，namei出来的是一个没带锁的inode
+        end_op();
+        return -1;
+      }
+      ilock(ip);
+      if(ip->type==T_SYMLINK&&(omode&O_NOFOLLOW)==0)
+      {
+        threshold++;
+        if(threshold>10)
+        {
+          iunlockput(ip);//释放锁
+          end_op();
+          return -1;
+        }
+        if(readi(ip,0,(uint64)path,0,MAXPATH)<0)
+        {
+          iunlockput(ip);
+          end_op();
+          return -1;
+        }
+        iunlockput(ip);
+      }
+      else
+      {
+        break;
+      }
     }
-    ilock(ip);
+
+    // ilock(ip);
+    //这里的就是我们最终需要的inode
     if(ip->type == T_DIR && omode != O_RDONLY){
       iunlockput(ip);
       end_op();
@@ -345,6 +373,8 @@ sys_open(void)
     end_op();
     return -1;
   }
+
+  //在这里处理他是一个符号连接，就需要找到他真正的文件
 
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
     if(f)
@@ -510,8 +540,35 @@ sys_pipe(void)
   return 0;
 }
 
+//symlink(target,path),target为被指向的文件，path是一个符号链接
 uint64
 sys_symlink(void)
 {
+  char new[MAXPATH], old[MAXPATH];
+  struct inode *newip;
+
+  if(argstr(0, old, MAXPATH) < 0 || argstr(1, new, MAXPATH) < 0)
+    return -1;
+    
+  begin_op();
+
+  //把oldip的inode的数据拷贝给newip,newip现在还没存在
+  // printf("56622\n");
+  
+  newip=create(new,T_SYMLINK,0,0);//获得了一个新inode,create出来的是一个带锁的inode，所以后面我们就需要去释放在恶化个锁
+  if(newip == 0){
+    end_op();
+    return -1;
+  }
+  // ilock(newip);
+  if(writei(newip,0,(uint64)old,0,MAXPATH)<0)//写入指向的文件名即可
+  {
+    iunlockput(newip);
+    end_op();
+    return -1;
+  }
+  iunlockput(newip);
+
+  end_op();
   return 0;
 }

@@ -239,7 +239,7 @@ ialloc(uint dev, short type) // 分配一个inode指针，有数据
 // Must be called after every change to an ip->xxx field
 // that lives on disk.
 // Caller must hold ip->lock.
-void iupdate(struct inode *ip)
+void iupdate(struct inode *ip)//更新inode
 {
   // 修改已经缓存了inode的代码比米立即调用iupdate将其写入磁盘
   struct buf *bp;
@@ -487,7 +487,7 @@ bmap(struct inode *ip, uint bn) // 返回bn对应的data block number
 
 // Truncate inode (discard contents).
 // Caller must hold ip->lock.
-void itrunc(struct inode *ip)
+void itrunc(struct inode *ip)//释放double的块，等做完symbollink回来做
 {
   // 释放块
   int i, j;
@@ -621,9 +621,9 @@ int namecmp(const char *s, const char *t)
 // Look for a directory entry in a directory.
 // If found, set *poff to byte offset of entry.
 struct inode *
-dirlookup(struct inode *dp, char *name, uint *poff) // poff就是用来记录但前的偏移量
+dirlookup(struct inode *dp, char *name, uint *poff) // poff就是用来记录但前的偏移量，在目录中查询具有给定名字的条目
 {
-  // 在目录中查询具有给定名字的条目
+
   uint off, inum;
   struct dirent de;
 
@@ -651,9 +651,9 @@ dirlookup(struct inode *dp, char *name, uint *poff) // poff就是用来记录但
 
 // Write a new directory entry (name, inum) into the directory dp.
 // Returns 0 on success, -1 on failure (e.g. out of disk blocks).
-int dirlink(struct inode *dp, char *name, uint inum)
+int dirlink(struct inode *dp, char *name, uint inum)// 将给定名称和inode编号的新目录条目写入到目录dp中，
 {
-  // 将给定名称和inode编号的新目录条目写入到目录dp中，
+  
   int off;
   struct dirent de;
   struct inode *ip;
@@ -744,7 +744,7 @@ namex(char *path, int nameiparent, char *name)
       iunlockput(ip);
       return 0;
     }
-    if (nameiparent && *path == '\0')
+    if (nameiparent && *path == '\0')//如果是父目录的话，就返回最后一个文件的上一级目录的inode
     {
       // Stop one level early.
       iunlock(ip); // 解锁，直接返回
