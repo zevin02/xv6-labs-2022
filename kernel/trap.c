@@ -67,7 +67,17 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else {
+  } 
+    else if(r_scause() == 0xd || r_scause() == 0xf) {
+    // 因为包含关系的问题, 我们直接把函数放到 sysfile.c 里面
+    // printf("%p\n%p\n", r_stval(), PGROUNDDOWN(r_stval()));
+    if(!map_mmap(p, r_stval())) {
+        printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
+        printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+        p->killed = 1;
+    }
+    }
+  else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     setkilled(p);

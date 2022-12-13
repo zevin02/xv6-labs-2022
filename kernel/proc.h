@@ -80,6 +80,18 @@ struct trapframe {
 };
 
 enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
+#define MAXVMA 16
+
+struct VMA {
+    uint64 start;  // 起始地址
+    uint64 end;    // 结束地址
+    uint64 length; // 区域的长度
+    int prot;      // 权限
+    int flags;     // MAP_SHARED,MAP_PRIVATE
+    struct file *file; // 对应的文件
+    int offset;    // 可能释放了一个部分, 此时 offset 可能不是 0
+};
+
 
 // Per-process state
 struct proc {
@@ -104,4 +116,6 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  struct VMA vma[MAXVMA];       //每个进程都需要保存VMA，记录被mmap映射的区域
+
 };

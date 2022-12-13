@@ -5,7 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
-
+#include"fcntl.h"
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
@@ -308,6 +308,14 @@ fork(void)
       np->ofile[i] = filedup(p->ofile[i]);
   np->cwd = idup(p->cwd);
 
+for(int i = 0; i < MAXVMA; ++i) {
+    if(p->vma[i].length) {//如果对应的存在
+        memmove(&(np->vma[i]), &(p->vma[i]), sizeof(struct VMA));//确保和副进程拥有相同的映射区域
+        filedup(p->vma[i].file);//增加引用计数
+    } else {
+        np->vma[i].length = 0;
+    }
+}
   safestrcpy(np->name, p->name, sizeof(p->name));
 
   pid = np->pid;
@@ -359,7 +367,15 @@ exit(int status)
       p->ofile[fd] = 0;
     }
   }
-
+  //exit退出的时候需要释放映射的文件区域
+  //退出的时候，要释放映射的文件区域
+for(int i = 0; i < MAXVMA; i++) {
+    struct VMA *v = &(p->vma[i]);
+    if(v->length != 0){//这个说明这个区域已经被我们用page fault处理过了，所以我们就需要处理
+        uvmunmap(p->pagetable, v->start, v->length/PGSIZE, 1);//解除映射，同时释放物理内存
+        v->length = 0;
+    }
+}
   begin_op();
   iput(p->cwd);
   end_op();
