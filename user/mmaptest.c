@@ -57,7 +57,7 @@ _v1(char *p)
 // 1.5 pages of 'A' and half a page of zeros.
 //
 void
-makefile(const char *f)
+makefile(const char *f)//给这个文件写数据
 {
   int i;
   int n = PGSIZE/BSIZE;
@@ -125,7 +125,7 @@ mmap_test(void)
   p = mmap(0, PGSIZE*2, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
   if (p == MAP_FAILED)
     err("mmap (2)");
-  if (close(fd) == -1)
+  if (close(fd) == -1)//先关闭这个文件描述符，
     err("close");
   _v1(p);
   for (i = 0; i < PGSIZE*2; i++)
