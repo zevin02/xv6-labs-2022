@@ -6,7 +6,8 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include<string.h>
-int main(int argc, char* argv[])
+
+void mmap_test1()
 {
     int fd;
     void *start=NULL;
@@ -19,13 +20,33 @@ int main(int argc, char* argv[])
     if(start == MAP_FAILED){
         return (-1);
     }
-
+    
     printf("%s\n", (char*)start); // 输出内存内容
     char s[123]="write to it\n";
-    strcpy(start,s);
     munmap(start, sb.st_size); // 解除内存映射
     close(fd); // 关闭文件
 
+}
+
+void mmap_test2()
+{
+    void* p=mmap(0,0x1000,PROT_READ|PROT_WRITE,MAP_PRIVATE,-1,0);
+    if(p==MAP_FAILED)
+    {
+        printf("success\n");
+    }
+    else
+    {
+        printf("failure\n");
+    }
+    *(int*)p=2;
+    printf("read=%d\n",*(int*)p);
+}
+
+int main(int argc, char* argv[])
+{
+    // mmap_test1();
+    mmap_test2();
     return 0;
 }
 
