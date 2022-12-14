@@ -68,14 +68,25 @@ usertrap(void)
   } else if((which_dev = devintr()) != 0){
     // ok
   } 
-    else if(r_scause() == 0xd || r_scause() == 0xf) {
-    // 因为包含关系的问题, 我们直接把函数放到 sysfile.c 里面
-    // printf("%p\n%p\n", r_stval(), PGROUNDDOWN(r_stval()));
-    if(!map_mmap(p, r_stval())) {
+    else if(r_scause()==0xd||r_scause()==0xf)
+    {
+      //在这里处理page fault方法
+      uint64 addr=r_stval();//在这里获得他的虚拟地址
+      if(mmap_handler(addr)<0)
+      {
+        //失败
+        printf("fail\n");
         printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
         printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
-        p->killed = 1;
-    }
+        p->killed=1;
+      }
+      else
+      {
+        // printf("success\n");
+        // printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
+        // printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+      }
+
     }
   else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);

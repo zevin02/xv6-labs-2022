@@ -5,7 +5,6 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
-#include"fcntl.h"
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
@@ -124,7 +123,11 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
-
+  for(int i=0;i<MAXVMA;i++)
+  {
+    //把这里的所有的vma中的used字段进行初始化为0
+    p->vma[i].used=0;
+  }
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     freeproc(p);
@@ -308,15 +311,22 @@ fork(void)
       np->ofile[i] = filedup(p->ofile[i]);
   np->cwd = idup(p->cwd);
 
-for(int i = 0; i < MAXVMA; ++i) {
-    if(p->vma[i].length) {//如果对应的存在
-        memmove(&(np->vma[i]), &(p->vma[i]), sizeof(struct VMA));//确保和副进程拥有相同的映射区域
-        filedup(p->vma[i].file);//增加引用计数
-    } else {
-        np->vma[i].length = 0;
-    }
-}
   safestrcpy(np->name, p->name, sizeof(p->name));
+  for(int i=0;i<MAXVMA;i++)
+  {
+    struct vma* pv=&p->vma[i];
+    struct vma* npv=&np->vma[i];
+    
+    if(pv->used)
+    {
+      *npv=*pv;
+      filedup(pv->f);
+    }
+    else
+    {
+      npv->used=0;
+    }
+  }
 
   pid = np->pid;
 
@@ -367,15 +377,17 @@ exit(int status)
       p->ofile[fd] = 0;
     }
   }
-  //exit退出的时候需要释放映射的文件区域
-  //退出的时候，要释放映射的文件区域
-for(int i = 0; i < MAXVMA; i++) {
-    struct VMA *v = &(p->vma[i]);
-    if(v->length != 0){//这个说明这个区域已经被我们用page fault处理过了，所以我们就需要处理
-        uvmunmap(p->pagetable, v->start, v->length/PGSIZE, 1);//解除映射，同时释放物理内存
-        v->length = 0;
+  //解除文件的映射
+  for(int i=0;i<MAXVMA;i++)
+  {
+    struct vma* v=&p->vma[i];
+    if(v->used)
+    {
+      //这一段地址就需要进行解决映射
+      uvmunmap(p->pagetable,v->start,v->length/PGSIZE,1);
     }
-}
+  }
+
   begin_op();
   iput(p->cwd);
   end_op();

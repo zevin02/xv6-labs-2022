@@ -40,7 +40,7 @@ _v1(char *p)
   for (i = 0; i < PGSIZE*2; i++) {
     if (i < PGSIZE + (PGSIZE/2)) {
       if (p[i] != 'A') {
-        printf("mismatch at %d, wanted 'A', got 0x%x\n", i, p[i]);
+        printf("mismatch at %d, wanted 'A', got 0x%x\n", i, p[i]);//在最后一个地方出现错误了
         err("v1 mismatch (1)");
       }
     } else {
@@ -166,10 +166,10 @@ mmap_test(void)
 
   // write the mapped memory.
   for (i = 0; i < PGSIZE*2; i++)
-    p[i] = 'Z';
+    p[i] = 'Z';//这里我们对内存进行修改了，因为是SHARED,所以对应的文件也要修改
 
   // unmap just the first two of three pages of mapped memory.
-  if (munmap(p, PGSIZE*2) == -1)
+  if (munmap(p, PGSIZE*2) == -1)//只解除了一部分映射
     err("munmap (3)");
   
   printf("test mmap read/write: OK\n");
@@ -184,7 +184,7 @@ mmap_test(void)
     char b;
     if (read(fd, &b, 1) != 1)
       err("read (1)");
-    if (b != 'Z')
+    if (b != 'Z')//这个就是希望读取的文件也被修改了
       err("file does not contain modifications");
   }
   if (close(fd) == -1)

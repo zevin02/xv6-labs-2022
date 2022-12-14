@@ -188,5 +188,5 @@ void            virtio_disk_intr(void);
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
 
-int map_mmap(struct proc*,uint64);
-int filewrite_offset(struct file *, uint64, int, int);
+int mmap_handler(uint64);
+int sync_file(struct file*,uint64,int,int);
