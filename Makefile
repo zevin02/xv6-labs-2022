@@ -3,10 +3,14 @@
 # (e.g., LAB=util).  Run make grade to test solution with the lab's
 # grade script (e.g., grade-lab-util).
 
--include conf/lab.mk
+-include conf/lab.mk	# 定义是哪个lab，定义LAB，我们后面就可以使用这个LAB了
 
-K=kernel
+K=kernel				# 定义前导目录，方便我们写
 U=user
+
+# 展开kernel/entry.o
+# s\换行符
+# 我们可以把OBJS这个变量别名理解为一个string
 
 OBJS = \
   $K/entry.o \
@@ -44,14 +48,14 @@ OBJS_KCSAN += \
 	$K/kcsan.o
 endif
 
-ifeq ($(LAB),$(filter $(LAB), lock))
+ifeq ($(LAB),$(filter $(LAB), lock))	#if(LAB==pgtbl||LAB==lock),就OBJS继续往后增加两个目标文件
 OBJS += \
 	$K/stats.o\
 	$K/sprintf.o
 endif
 
 
-ifeq ($(LAB),net)
+ifeq ($(LAB),net)		# if(LAB==net),就把下面这些文件也加入到OBJS中
 OBJS += \
 	$K/e1000.o \
 	$K/net.o \
@@ -65,6 +69,10 @@ endif
 #TOOLPREFIX = 
 
 # Try to infer the correct TOOLPREFIX if not set
+# 我们可以在makefile、中调用shell command
+# 尝试区看如果是的话，就把TOOLPREFIX设置成对应的值，echo就是把TOOLPREFIX设置成那个值
+# 最下面如果都没有的话，就会报一个错误
+# shell 函数，用来执行shell命令，把返回值赋值给=左边
 ifndef TOOLPREFIX
 TOOLPREFIX := $(shell if riscv64-unknown-elf-objdump -i 2>&1 | grep 'elf64-big' >/dev/null 2>&1; \
 	then echo 'riscv64-unknown-elf-'; \
@@ -78,16 +86,17 @@ TOOLPREFIX := $(shell if riscv64-unknown-elf-objdump -i 2>&1 | grep 'elf64-big' 
 	echo "***" 1>&2; exit 1; fi)
 endif
 
-QEMU = qemu-system-riscv64
+QEMU = qemu-system-riscv64	# 指定QEMU版本
 
-CC = $(TOOLPREFIX)gcc
-AS = $(TOOLPREFIX)gas
-LD = $(TOOLPREFIX)ld
+CC = $(TOOLPREFIX)gcc		#  指定编译器
+AS = $(TOOLPREFIX)gas		#  汇编器
+LD = $(TOOLPREFIX)ld		#  链接器，前面都加上工具的版本
 OBJCOPY = $(TOOLPREFIX)objcopy
 OBJDUMP = $(TOOLPREFIX)objdump
 
-CFLAGS = -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2
+CFLAGS = -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2	# 指定一些标志
 
+# 如果定义了LAB，就执行下面的操作
 ifdef LAB
 LABUPPER = $(shell echo $(LAB) | tr a-z A-Z)
 XCFLAGS += -DSOL_$(LABUPPER) -DLAB_$(LABUPPER)
@@ -119,8 +128,10 @@ endif
 
 LDFLAGS = -z max-page-size=4096
 
+# 我们想要生成的目标文件是kernel/kernel,依赖于右边的这些东西
+# 把所有的目标文件给总和在一起，我们需要kernel.ld,生成的叫做kernel,依赖于objs,objs_kscan
 $K/kernel: $(OBJS) $(OBJS_KCSAN) $K/kernel.ld $U/initcode
-	$(LD) $(LDFLAGS) -T $K/kernel.ld -o $K/kernel $(OBJS) $(OBJS_KCSAN)
+	$(LD) $(LDFLAGS) -T $K/kernel.ld -o $K/kernel $(OBJS) $(OBJS_KCSAN)		
 	$(OBJDUMP) -S $K/kernel > $K/kernel.asm
 	$(OBJDUMP) -t $K/kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $K/kernel.sym
 
@@ -139,7 +150,7 @@ $U/initcode: $U/initcode.S
 tags: $(OBJS) _init
 	etags *.S *.c
 
-ULIB = $U/ulib.o $U/usys.o $U/printf.o $U/umalloc.o
+ULIB = $U/ulib.o $U/usys.o $U/printf.o $U/umalloc.o	#  用户层面的东西
 
 ifeq ($(LAB),$(filter $(LAB), lock))
 ULIB += $U/statistics.o
@@ -149,13 +160,13 @@ _%: %.o $(ULIB)
 	$(LD) $(LDFLAGS) -T $U/user.ld -o $@ $^
 	$(OBJDUMP) -S $@ > $*.asm
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $*.sym
-
+# 用perl来生成 ，把user.pl写成usey.S 
+# 用gcc，依赖.S,生成.o
 $U/usys.S : $U/usys.pl
-	perl $U/usys.pl > $U/usys.S
+	perl $U/usys.pl > $U/usys.S			 
 
 $U/usys.o : $U/usys.S
-	$(CC) $(CFLAGS) -c -o $U/usys.o $U/usys.S
-
+	$(CC) $(CFLAGS) -c -o $U/usys.o $U/usys.S	
 $U/_forktest: $U/forktest.o $(ULIB)
 	# forktest has less library code linked in - needs to be small
 	# in order to be able to max out the proc table.
@@ -170,7 +181,7 @@ mkfs/mkfs: mkfs/mkfs.c $K/fs.h $K/param.h
 # details:
 # http://www.gnu.org/software/make/manual/html_node/Chained-Rules.html
 .PRECIOUS: %.o
-
+# 用户层面的东西，目标层序
 UPROGS=\
 	$U/_cat\
 	$U/_echo\
@@ -191,7 +202,7 @@ UPROGS=\
 
 
 
-
+# 如果filter,在，右边找和左边重复的元素
 ifeq ($(LAB),$(filter $(LAB), lock))
 UPROGS += \
 	$U/_stats
@@ -223,7 +234,7 @@ $U/uthread_switch.o : $U/uthread_switch.S
 $U/_uthread: $U/uthread.o $U/uthread_switch.o $(ULIB)
 	$(LD) $(LDFLAGS) -N -e main -Ttext 0 -o $U/_uthread $U/uthread.o $U/uthread_switch.o $(ULIB)
 	$(OBJDUMP) -S $U/_uthread > $U/uthread.asm
-
+# 这些都是伪目标
 ph: notxv6/ph.c
 	gcc -o ph -g -O2 $(XCFLAGS) notxv6/ph.c -pthread
 
@@ -259,10 +270,10 @@ ifeq ($(LAB),util)
 	UEXTRA += user/xargstest.sh
 endif
 
-
+# 这些都是伪目标，可以直接使用
 fs.img: mkfs/mkfs README $(UEXTRA) $(UPROGS)
 	mkfs/mkfs fs.img README $(UEXTRA) $(UPROGS)
-
+# .d就是依赖文件，和.mk一样都是依赖文件
 -include kernel/*.d user/*.d
 
 clean: 
@@ -280,15 +291,15 @@ GDBPORT = $(shell expr `id -u` % 5000 + 25000)
 QEMUGDB = $(shell if $(QEMU) -help | grep -q '^-gdb'; \
 	then echo "-gdb tcp::$(GDBPORT)"; \
 	else echo "-s -p $(GDBPORT)"; fi)
-ifndef CPUS
+ifndef CPUS# 定义CPU个数
 CPUS := 3
 endif
-ifeq ($(LAB),fs)
+ifeq ($(LAB),fs)# 如果是fs的话，CPU就直接指定为1
 CPUS := 1
 endif
 
 FWDPORT = $(shell expr `id -u` % 5000 + 25999)
-
+# 这些都是make qemu的以一些参数
 QEMUOPTS = -machine virt -bios none -kernel $K/kernel -m 128M -smp $(CPUS) -nographic
 QEMUOPTS += -global virtio-mmio.force-legacy=false
 QEMUOPTS += -drive file=fs.img,if=none,format=raw,id=x0
@@ -406,5 +417,5 @@ myapi.key:
 		false; \
 	fi;
 
-
+# 声明这些都是伪目标
 .PHONY: handin tarball tarball-pref clean grade handin-check
