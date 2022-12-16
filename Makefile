@@ -11,7 +11,8 @@ U=user
 # 展开kernel/entry.o
 # s\换行符
 # 我们可以把OBJS这个变量别名理解为一个string
-
+# 这里是编译内核态的代码，kernel依赖于这些代码
+# 所以这下面的要一个一个开始生成
 OBJS = \
   $K/entry.o \
   $K/kalloc.o \
@@ -91,8 +92,8 @@ QEMU = qemu-system-riscv64	# 指定QEMU版本
 CC = $(TOOLPREFIX)gcc		#  指定编译器
 AS = $(TOOLPREFIX)gas		#  汇编器
 LD = $(TOOLPREFIX)ld		#  链接器，前面都加上工具的版本
-OBJCOPY = $(TOOLPREFIX)objcopy
-OBJDUMP = $(TOOLPREFIX)objdump
+OBJCOPY = $(TOOLPREFIX)objcopy	# 把一个目标文件的内容拷贝到另一个目标文件中
+OBJDUMP = $(TOOLPREFIX)OBJDUMP	# objdump是把二进制文件反汇编成一个.asm文件
 
 CFLAGS = -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2	# 指定一些标志
 
@@ -113,7 +114,7 @@ ifeq ($(LAB),net)
 CFLAGS += -DNET_TESTS_PORT=$(SERVERPORT)
 endif
 
-ifdef KCSAN
+ifdef KCSAp
 CFLAGS += -DKCSAN
 KCSANFLAG = -fsanitize=thread
 endif
@@ -130,9 +131,10 @@ LDFLAGS = -z max-page-size=4096
 
 # 我们想要生成的目标文件是kernel/kernel,依赖于右边的这些东西
 # 把所有的目标文件给总和在一起，我们需要kernel.ld,生成的叫做kernel,依赖于objs,objs_kscan
+# objdump -S参数就是把二进制文件转化成汇编文件
 $K/kernel: $(OBJS) $(OBJS_KCSAN) $K/kernel.ld $U/initcode
 	$(LD) $(LDFLAGS) -T $K/kernel.ld -o $K/kernel $(OBJS) $(OBJS_KCSAN)		
-	$(OBJDUMP) -S $K/kernel > $K/kernel.asm
+	$(OBJDUMP) -S $K/kernel > $K/kernel.asm    
 	$(OBJDUMP) -t $K/kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $K/kernel.sym
 
 $(OBJS): EXTRAFLAG := $(KCSANFLAG)
@@ -310,6 +312,7 @@ QEMUOPTS += -netdev user,id=net0,hostfwd=udp::$(FWDPORT)-:2000 -object filter-du
 QEMUOPTS += -device e1000,netdev=net0,bus=pcie.0
 endif
 
+# qemu依赖于kernel， fs.img              
 qemu: $K/kernel fs.img
 	$(QEMU) $(QEMUOPTS)
 
