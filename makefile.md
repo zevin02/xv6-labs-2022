@@ -6,42 +6,106 @@ makefile就是一个深搜的过程，最上面的语句是顶级目标，顶级
 
 所以就是上面没有的，要在下面实现，再下面都实现了，上面的顶级目标才能实现
 
-
 # 生成QEMU可执行文件
+
+make qemu
+
+qemu 依赖于kernel 和fs.img，把内核加载进去，文件系统挂载进去，之后一个操作系统就可以跑起来了
+
+模拟risc-v指令集的CPU，比较关键的就是-kernel $K/kernel和-driver file=fs.img
+
+```makefile
+
+QEMU = qemu-system-riscv64	# 指定QEMU版本risc-v 的CPU
+# --》 指定了使用的操作内核是kernel/kernel,-m 模拟了操作系统使用的内存128M，使用了3个cpu个数，
+QEMUOPTS = -machine virt -bios none -kernel $K/kernel -m 128M -smp $(CPUS) -nographic
+# 
+QEMUOPTS += -global virtio-mmio.force-legacy=false
+# 把文件系统挂载上去，最终就是模拟出来的一个计算机
+QEMUOPTS += -drive file=fs.img,if=none,format=raw,id=x0
+QEMUOPTS += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
+
+ifeq ($(LAB),net)
+QEMUOPTS += -netdev user,id=net0,hostfwd=udp::$(FWDPORT)-:2000 -object filter-dump,id=net0,netdev=net0,file=packets.pcap
+QEMUOPTS += -device e1000,netdev=net0,bus=pcie.0
+endif
+
+# qemu依赖于kernel， fs.img  
+qemu: $K/kernel fs.img
+	$(QEMU) $(QEMUOPTS)------->这里有了操作系统和用户程序还缺少硬件
+
+```
+
+![](https://cdn.jsdelivr.net/gh/zevin02/picb@master/imgss/20221217212740.png)
 
 ## 生成kernel可执行文件
 
+```makefile
+$K/kernel: $(OBJS) $(OBJS_KCSAN) $K/kernel.ld $U/initcode
+# 把所有.o文件用kernel.ld配置的链接器进行链接起来,生成一个kernel
+	$(LD) $(LDFLAGS) -T $K/kernel.ld -o $K/kernel $(OBJS) $(OBJS_KCSAN)
+# 把kernel反汇编成kernel.asm，让我们能够进行debug
+	$(OBJDUMP) -S $K/kernel > $K/kernel.asm
+# 把asm中的一些数据进行过滤，方便进行查找  
+	$(OBJDUMP) -t $K/kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $K/kernel.sym
+
+```
+
+
 ### 生成kernel下的OBJS
+
+kernel下的许多程序函数，都需要在 `kernel/main.c`函数中使用
+
+(1)编译目标定义
+
+```makefile
+
+# 展开kernel/entry.o
+# s\换行符
+# 我们可以把OBJS这个变量别名理解为一个string
+# 这里是编译内核态的代码，kernel依赖于这些代码
+# 所以这下面的要一个一个开始生成
+OBJS = \
+  $K/entry.o \
+  $K/kalloc.o \
+  $K/string.o \
+  $K/main.o \
+  $K/vm.o \
+  $K/proc.o \
+  $K/swtch.o \
+  $K/trampoline.o \
+  $K/trap.o \
+  $K/syscall.o \
+  $K/sysproc.o \
+  $K/bio.o \
+  $K/fs.o \
+  $K/log.o \
+  $K/sleeplock.o \
+  $K/file.o \
+  $K/pipe.o \
+  $K/exec.o \
+  $K/sysfile.o \
+  $K/kernelvec.o \
+  $K/plic.o \
+  $K/virtio_disk.o
+```
+
+> %.o就是一个通配符，所有的.o都依赖于.c文件,这些都是kernel下的程序
+
+```makefile
+$K/%.o: $K/%.c
+	$(CC) $(CFLAGS) $(EXTRAFLAG) -c -o $@ $<
+```
 
 .S汇编都是下面这样生成的
 
 > riscv64-linux-gnu-gcc    -c -o kernel/entry.o kernel/entry.S
 
-.cpp就是下面这样编译的，规则是不一样的
+.c就是下面这样编译的，规则是不一样的
 
 > riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie  -c -o kernel/kalloc.o kernel/kalloc.c
 
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie  -c -o `kernel/string.o` `kernel/string.c`
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie  -c -o `kernel/main.o` `kernel/main.c`
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie  -c -o `kernel/vm.o kernel/vm.c`
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie  -c -o ` kernel/proc.o` kernel/proc.c
-riscv64-linux-gnu-gcc    -c -o `kernel/swtch.o `kernel/swtch.S
-riscv64-linux-gnu-gcc    -c -o `kernel/trampoline.o` kernel/trampoline.S
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie  -c -o `kernel/trap.o` kernel/trap.c
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie  -c -o `kernel/syscall.o` kernel/syscall.c
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie  -c -o `kernel/sysproc.o` kernel/sysproc.c
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie  -c -o `kernel/bio.o` kernel/bio.c
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie  -c -o `kernel/fs.o` kernel/fs.c
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie  -c -o `kernel/log.o `kernel/log.c
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie  -c -o `kernel/sleeplock.o `kernel/sleeplock.c
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie  -c -o `kernel/file.o` kernel/file.c
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie  -c -o `kernel/pipe.o` kernel/pipe.c
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie  -c -o `kernel/exec.o` kernel/exec.c
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie  -c -o `kernel/sysfile.o `kernel/sysfile.c
-riscv64-linux-gnu-gcc    -c -o `kernel/kernelvec.o `kernel/kernelvec.S riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie  -c -o `kernel/plic.o `kernel/plic.c riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie  -c -o `kernel/virtio_disk.o` kernel/virtio_disk.c
-
-
-到这里整个 `kernel`的 `OBJS` 都被build完成了
+到这里整个 `kernel`的 `OBJS` 都被build
 
 ---
 
@@ -109,218 +173,148 @@ SECTIONS
 
 ### build OBJS_KCSAN
 
+这些程序都是处理和硬件中断相关的程序
 
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie  -c -o kernel/start.o kernel/start.c
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie  -c -o kernel/console.o kernel/console.c
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie  -c -o kernel/printf.o kernel/printf.c
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie  -c -o kernel/uart.o kernel/uart.c
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie  -c -o kernel/spinlock.o kernel/spinlock.c
+```makefile
+OBJS_KCSAN = \
+  $K/start.o \
+  $K/console.o \
+  $K/printf.o \
+  $K/uart.o \
+  $K/spinlock.o
 
+```
 
-
-
-
-
+```makefile
+$K/%.o: $K/%.c
+	$(CC) $(CFLAGS) $(EXTRAFLAG) -c -o $@ $<
+```
 
 ### build initcode
 
+用户空间初始化程序
 
-生成一个initcode.o文件
+在 `kernel/main.c`中使用到了这个程序，执行**第一个用户**程序 `"init"`程序,这一段可加可不加，kernel编译中只加了这一部分
 
-> riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie -march=rv64g -nostdinc -I. -Ikernel -c user/initcode.S -o user/initcode.o
+```c
+// a user program that calls exec("/init")
+// assembled from ../user/initcode.S
+// od -t xC ../user/initcode
+uchar initcode[] = {
+    0x17, 0x05, 0x00, 0x00, 0x13, 0x05, 0x45, 0x02,
+    0x97, 0x05, 0x00, 0x00, 0x93, 0x85, 0x35, 0x02,
+    0x93, 0x08, 0x70, 0x00, 0x73, 0x00, 0x00, 0x00,
+    0x93, 0x08, 0x20, 0x00, 0x73, 0x00, 0x00, 0x00,
+    0xef, 0xf0, 0x9f, 0xff, 0x2f, 0x69, 0x6e, 0x69,
+    0x74, 0x00, 0x00, 0x24, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00};
 
-用链接器生成initcode.out可执行文件
+```
 
-> riscv64-linux-gnu-ld -z max-page-size=4096 -N -e start -Ttext 0 -o user/initcode.out user/initcode.o
+```makefile
 
-把initcode.out拷贝到initcode里面
-
-> riscv64-linux-gnu-objcopy -S -O binary user/initcode.out user/initcode
-
-把initcode.o反汇编出initcode.asm
-
-> riscv64-linux-gnu-objdump -S user/initcode.o > user/initcode.asm
-
----
+$U/initcode: $U/initcode.S
+	$(CC) $(CFLAGS) -march=rv64g -nostdinc -I. -Ikernel -c $U/initcode.S -o $U/initcode.o
+	$(LD) $(LDFLAGS) -N -e start -Ttext 0 -o $U/initcode.out $U/initcode.o
+	$(OBJCOPY) -S -O binary $U/initcode.out $U/initcode
+	$(OBJDUMP) -S $U/initcode.o > $U/initcode.asm
+```
 
 
-所有build kernel的前值任务
-
-把所有.o文件链接起来生成一个可执行文件
-
-riscv64-linux-gnu-ld -z max-page-size=4096 -T kernel/kernel.ld -o kernel/kernel kernel/entry.o kernel/kalloc.o kernel/string.o kernel/main.o kernel/vm.o kernel/proc.o kernel/swtch.o kernel/trampoline.o kernel/trap.o kernel/syscall.o kernel/sysproc.o kernel/bio.o kernel/fs.o kernel/log.o kernel/sleeplock.o kernel/file.o kernel/pipe.o kernel/exec.o kernel/sysfile.o kernel/kernelvec.o kernel/plic.o kernel/virtio_disk.o kernel/start.o kernel/console.o kernel/printf.o kernel/uart.o kernel/spinlock.o
-
-生成一个.asm反汇编
-
-riscv64-linux-gnu-objdump -S kernel/kernel > kernel/kernel.asm
-
-指定了一些字符串过滤，后输出到kernel.sym
-
-riscv64-linux-gnu-objdump -t kernel/kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$/d' > kernel/kernel.sym
-
----
-
-## 生成一个fs.img可执行文件
+## 生成一个fs.img文件系统
 
 这个就是生成一个文件系统,相当于一个硬盘的镜像（用来存放用户程序的)
 
-这个可执行文件依赖于mkfs,README ,user的可执行文件,以及如果lab=util的话，还要有UPROGS
+> 这里的mkfs/mkfs程序，就是将后面的$(UPROGS),$(UEXTRA)用户编译好的程序,写入 `fs.img`这个文件系统中
+
+```makefile
+# 这些都是伪目标，可以直接使用
+fs.img: mkfs/mkfs README $(UEXTRA) $(UPROGS)
+	mkfs/mkfs fs.img README $(UEXTRA) $(UPROGS)
+```
+
+> mkfs/mkfs fs.img README  user/_cat user/_echo user/_forktest user/_grep user/_init user/_kill user/_ln user/_ls user/_mkdir user/_rm user/_sh user/_stressfs user/_usertests user/_grind user/_wc user/_zombie  user/_pgtbltest
 
 ### mkfs
 
-生成mkfs,就还需要有user中的一些可执行文件
+```makefile
+mkfs/mkfs: mkfs/mkfs.c $K/fs.h $K/param.h
+	gcc $(XCFLAGS) -Werror -Wall -I. -o mkfs/mkfs mkfs/mkfs.c
+```
 
-gcc -DSOL_PGTBL -DLAB_PGTBL -Werror -Wall -I. -o mkfs/mkfs mkfs/mkfs.c
+`mkfs/mkfs`就是往文件系统中写文件的程序
 
+> gcc -DSOL_PGTBL -DLAB_PGTBL -Werror -Wall -I. -o mkfs/mkfs mkfs/mkfs.c
 
-#### mkfs中使用了很多函数,UPROGS
+### 用户程序的编译
+
+```makefile
+UPROGS=\
+	$U/_cat\
+	$U/_echo\
+	$U/_forktest\
+	$U/_grep\
+	$U/_init\
+	$U/_kill\
+	$U/_ln\
+	$U/_ls\
+	$U/_mkdir\
+	$U/_rm\
+	$U/_sh\
+	$U/_stressfs\
+	$U/_usertests\
+	$U/_grind\
+	$U/_wc\
+	$U/_zombie\
+
+ULIB = $U/ulib.o $U/usys.o $U/printf.o $U/umalloc.o	#  这个对标的就是C语言中的一些库函数，如printf，malloc之类的
+# 这里的_就是一个字符，后面的%就是匹配所有以_开头的文件
+# 依赖中的%.o,就是匹配所有.o结尾的文件，同时还要添加一个ULIB,依次去匹配这些东西
+_%: %.o $(ULIB)
+	$(LD) $(LDFLAGS) -T $U/user.ld -o $@ $^
+	$(OBJDUMP) -S $@ > $*.asm
+	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $*.sym
+
+```
+
+`ulib`中包含的就是一些string和内存操作的一些库函数,`printf`  包含了和标准输出相关的一些函数
+
+`umalloc`包含了malloc相关的动态开辟之类的函数
+
+`usys`里面包含的就是系统调用相关的入口函数
+
+这些将来就可以被OS调用，从文件系统中加载到内存中进行执行
 
 用户态生成这些应用文件
 
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie   -c -o user/ulib.o user/ulib.c
-perl user/usys.pl > user/usys.S
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie -c -o user/usys.o user/usys.S
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie   -c -o user/printf.o user/printf.c
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie   -c -o user/umalloc.o user/umalloc.c
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie   -c -o user/cat.o user/cat.c
-
-
-
-把这些应用文件链接起来
-riscv64-linux-gnu-ld -z max-page-size=4096 -T user/user.ld -o user/_cat user/cat.o user/ulib.o user/usys.o user/printf.o user/umalloc.o
-riscv64-linux-gnu-objdump -S user/_cat > user/cat.asm
-riscv64-linux-gnu-objdump -t user/_cat | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$/d' > user/cat.sym
-
-
-
-继续生成用户的文件
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie   -c -o user/echo.o user/echo.c
-riscv64-linux-gnu-ld -z max-page-size=4096 -T user/user.ld -o user/_echo user/echo.o user/ulib.o user/usys.o user/printf.o user/umalloc.o
-riscv64-linux-gnu-objdump -S user/_echo > user/echo.asm
-riscv64-linux-gnu-objdump -t user/_echo | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$/d' > user/echo.sym
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie   -c -o user/forktest.o user/forktest.c
-
-
-forktest has less library code linked in - needs to be small
-
-in order to be able to max out the proc table.
-
-riscv64-linux-gnu-ld -z max-page-size=4096 -N -e main -Ttext 0 -o user/_forktest user/forktest.o user/ulib.o user/usys.o
-riscv64-linux-gnu-objdump -S user/_forktest > user/forktest.asm
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie   -c -o user/grep.o user/grep.c
-riscv64-linux-gnu-ld -z max-page-size=4096 -T user/user.ld -o user/_grep user/grep.o user/ulib.o user/usys.o user/printf.o user/umalloc.o
-riscv64-linux-gnu-objdump -S user/_grep > user/grep.asm
-riscv64-linux-gnu-objdump -t user/_grep | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$/d' > user/grep.sym
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie   -c -o user/init.o user/init.c
-riscv64-linux-gnu-ld -z max-page-size=4096 -T user/user.ld -o user/_init user/init.o user/ulib.o user/usys.o user/printf.o user/umalloc.o
-riscv64-linux-gnu-objdump -S user/_init > user/init.asm
-riscv64-linux-gnu-objdump -t user/_init | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$/d' > user/init.sym
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie   -c -o user/kill.o user/kill.c
-riscv64-linux-gnu-ld -z max-page-size=4096 -T user/user.ld -o user/_kill user/kill.o user/ulib.o user/usys.o user/printf.o user/umalloc.o
-riscv64-linux-gnu-objdump -S user/_kill > user/kill.asm
-riscv64-linux-gnu-objdump -t user/_kill | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$/d' > user/kill.sym
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie   -c -o user/ln.o user/ln.c
-riscv64-linux-gnu-ld -z max-page-size=4096 -T user/user.ld -o user/_ln user/ln.o user/ulib.o user/usys.o user/printf.o user/umalloc.o
-riscv64-linux-gnu-objdump -S user/_ln > user/ln.asm
-riscv64-linux-gnu-objdump -t user/_ln | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$/d' > user/ln.sym
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie   -c -o user/ls.o user/ls.c
-riscv64-linux-gnu-ld -z max-page-size=4096 -T user/user.ld -o user/_ls user/ls.o user/ulib.o user/usys.o user/printf.o user/umalloc.o
-riscv64-linux-gnu-objdump -S user/_ls > user/ls.asm
-riscv64-linux-gnu-objdump -t user/_ls | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$/d' > user/ls.sym
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie   -c -o user/mkdir.o user/mkdir.c
-riscv64-linux-gnu-ld -z max-page-size=4096 -T user/user.ld -o user/_mkdir user/mkdir.o user/ulib.o user/usys.o user/printf.o user/umalloc.o
-riscv64-linux-gnu-objdump -S user/_mkdir > user/mkdir.asm
-riscv64-linux-gnu-objdump -t user/_mkdir | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$/d' > user/mkdir.sym
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie   -c -o user/rm.o user/rm.c
-riscv64-linux-gnu-ld -z max-page-size=4096 -T user/user.ld -o user/_rm user/rm.o user/ulib.o user/usys.o user/printf.o user/umalloc.o
-riscv64-linux-gnu-objdump -S user/_rm > user/rm.asm
-riscv64-linux-gnu-objdump -t user/_rm | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$/d' > user/rm.sym
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie   -c -o user/sh.o user/sh.c
-riscv64-linux-gnu-ld -z max-page-size=4096 -T user/user.ld -o user/_sh user/sh.o user/ulib.o user/usys.o user/printf.o user/umalloc.o
-riscv64-linux-gnu-objdump -S user/_sh > user/sh.asm
-riscv64-linux-gnu-objdump -t user/_sh | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$/d' > user/sh.sym
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie   -c -o user/stressfs.o user/stressfs.c
-riscv64-linux-gnu-ld -z max-page-size=4096 -T user/user.ld -o user/_stressfs user/stressfs.o user/ulib.o user/usys.o user/printf.o user/umalloc.o
-riscv64-linux-gnu-objdump -S user/_stressfs > user/stressfs.asm
-riscv64-linux-gnu-objdump -t user/_stressfs | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$/d' > user/stressfs.sym
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie   -c -o user/usertests.o user/usertests.c
-riscv64-linux-gnu-ld -z max-page-size=4096 -T user/user.ld -o user/_usertests user/usertests.o user/ulib.o user/usys.o user/printf.o user/umalloc.o
-riscv64-linux-gnu-objdump -S user/_usertests > user/usertests.asm
-riscv64-linux-gnu-objdump -t user/_usertests | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$/d' > user/usertests.sym
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie   -c -o user/grind.o user/grind.c
-riscv64-linux-gnu-ld -z max-page-size=4096 -T user/user.ld -o user/_grind user/grind.o user/ulib.o user/usys.o user/printf.o user/umalloc.o
-riscv64-linux-gnu-objdump -S user/_grind > user/grind.asm
-riscv64-linux-gnu-objdump -t user/_grind | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$/d' > user/grind.sym
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie   -c -o user/wc.o user/wc.c
-riscv64-linux-gnu-ld -z max-page-size=4096 -T user/user.ld -o user/_wc user/wc.o user/ulib.o user/usys.o user/printf.o user/umalloc.o
-riscv64-linux-gnu-objdump -S user/_wc > user/wc.asm
-riscv64-linux-gnu-objdump -t user/_wc | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$/d' > user/wc.sym
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie   -c -o user/zombie.o user/zombie.c
-riscv64-linux-gnu-ld -z max-page-size=4096 -T user/user.ld -o user/_zombie user/zombie.o user/ulib.o user/usys.o user/printf.o user/umalloc.o
-riscv64-linux-gnu-objdump -S user/_zombie > user/zombie.asm
-riscv64-linux-gnu-objdump -t user/_zombie | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$/d' > user/zombie.sym
-riscv64-linux-gnu-gcc -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSOL_PGTBL -DLAB_PGTBL -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie   -c -o user/pgtbltest.o user/pgtbltest.c
-riscv64-linux-gnu-ld -z max-page-size=4096 -T user/user.ld -o user/_pgtbltest user/pgtbltest.o user/ulib.o user/usys.o user/printf.o user/umalloc.o
-riscv64-linux-gnu-objdump -S user/_pgtbltest > user/pgtbltest.asm
-riscv64-linux-gnu-objdump -t user/_pgtbltest | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$/d' > user/pgtbltest.sym
-
-
-
 硬盘构建完了上面这些在mkfs中使用到的编译完之后，就能构建fs.img
-mkfs/mkfs fs.img README  user/_cat user/_echo user/_forktest user/_grep user/_init user/_kill user/_ln user/_ls user/_mkdir user/_rm user/_sh user/_stressfs user/_usertests user/_grind user/_wc user/_zombie  user/_pgtbltest
 
+# 配置工具
 
+指定工具的版本，如果找不到合适的版本就输出错误信息
 
-
-nmeta 46 (boot, super, log blocks 30 inode blocks 13, bitmap blocks 1) blocks 1954 total 2000
-balloc: first 789 blocks have been allocated
-balloc: write bitmap block at sector 45
-
-
-
-## 执行qemu
-
-qemu 依赖于kernel 和fs.img
-
+```makefile
+TOOLPREFIX := $(shell if riscv64-unknown-elf-objdump -i 2>&1 | grep 'elf64-big' >/dev/null 2>&1; \
+	then echo 'riscv64-unknown-elf-'; \
+	elif riscv64-linux-gnu-objdump -i 2>&1 | grep 'elf64-big' >/dev/null 2>&1; \
+	then echo 'riscv64-linux-gnu-'; \
+	elif riscv64-unknown-linux-gnu-objdump -i 2>&1 | grep 'elf64-big' >/dev/null 2>&1; \
+	then echo 'riscv64-unknown-linux-gnu-'; \
+	else echo "***" 1>&2; \
+	echo "*** Error: Couldn't find a riscv64 version of GCC/binutils." 1>&2; \
+	echo "*** To turn off this error, run 'gmake TOOLPREFIX= ...'." 1>&2; \
+	echo "***" 1>&2; exit 1; fi)
 ```
 
-QEMU = qemu-system-riscv64	# 指定QEMU版本risc-v 的CPU
-# --》 指定了使用的操作内核是kernel/kernel,-m 模拟了操作系统使用的内存128M，使用了3个cpu个数，
-QEMUOPTS = -machine virt -bios none -kernel $K/kernel -m 128M -smp $(CPUS) -nographic
-# 
-QEMUOPTS += -global virtio-mmio.force-legacy=false
-# 把文件系统挂载上去，最终就是模拟出来的一个计算机
-QEMUOPTS += -drive file=fs.img,if=none,format=raw,id=x0
-QEMUOPTS += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
+配置编译器，汇编器，链接器，copy工具，dump工具（反汇编)
 
-ifeq ($(LAB),net)
-QEMUOPTS += -netdev user,id=net0,hostfwd=udp::$(FWDPORT)-:2000 -object filter-dump,id=net0,netdev=net0,file=packets.pcap
-QEMUOPTS += -device e1000,netdev=net0,bus=pcie.0
-endif
+---
 
-# qemu依赖于kernel， fs.img  
-qemu: $K/kernel fs.img
-	$(QEMU) $(QEMUOPTS)------->这里有了操作系统和用户程序还缺少硬件
+```makefile
 
+CC = $(TOOLPREFIX)gcc		#  指定编译器
+AS = $(TOOLPREFIX)gas		#  汇编器
+LD = $(TOOLPREFIX)ld		#  链接器，前面都加上工具的版本
+OBJCOPY = $(TOOLPREFIX)objcopy	# 把一个目标文件的内容拷贝到另一个目标文件中
+OBJDUMP = $(TOOLPREFIX)OBJDUMP	# objdump是把二进制文件反汇编成一个.asm文件
 ```
-
-qemu-system-riscv64 -machine virt -bios none -kernel kernel/kernel -m 128M -smp 3 -nographic -global virtio-mmio.force-legacy=false -drive file=fs.img,if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
-
-
-xv6 kernel is booting
-
-hart 1 starting
-hart 2 starting
-page table 0x0000000087f6b000
-..0: pte 0x0000000021fd9c01 pa 0x0000000087f67000
-.. ..0: pte 0x0000000021fd9801 pa 0x0000000087f66000
-.. .. ..0: pte 0x0000000021fda01b pa 0x0000000087f68000
-.. .. ..1: pte 0x0000000021fd9417 pa 0x0000000087f65000
-.. .. ..2: pte 0x0000000021fd9007 pa 0x0000000087f64000
-.. .. ..3: pte 0x0000000021fd8c17 pa 0x0000000087f63000
-..255: pte 0x0000000021fda801 pa 0x0000000087f6a000
-.. ..511: pte 0x0000000021fda401 pa 0x0000000087f69000
-.. .. ..509: pte 0x0000000021fdcc13 pa 0x0000000087f73000
-.. .. ..510: pte 0x0000000021fdd007 pa 0x0000000087f74000
-.. .. ..511: pte 0x0000000020001c0b pa 0x0000000080007000
-init: starting sh
