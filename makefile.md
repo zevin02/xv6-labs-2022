@@ -1,3 +1,12 @@
+# makefile语法格式
+
+makefile就是一个深搜的过程，最上面的语句是顶级目标，顶级目标还有依赖
+
+如果依赖不存在，下面我们还要写，
+
+所以就是上面没有的，要在下面实现，再下面都实现了，上面的顶级目标才能实现
+
+
 # 生成QEMU可执行文件
 
 ## 生成kernel可执行文件
@@ -36,8 +45,67 @@ riscv64-linux-gnu-gcc    -c -o `kernel/kernelvec.o `kernel/kernelvec.S riscv64-l
 
 ---
 
+### kernel.ld
 
+这是kernel目录底下的链接脚本，指导着我们把kernel的依赖文件链接成一个目标文件
 
+链接器 `ld `将按照脚本内的指令将 `.o`文件生成可执行文件
+
+主要描述的就是处理链接脚本的方式，以及生成可执行文件的内容布局
+
+```
+OUTPUT_ARCH( "riscv" )
+ENTRY( _entry )虚拟地址的路口
+这下面都是虚拟地址，这个就是kernel的虚拟地址空间
+SECTIONS
+{
+  /*
+   * ensure that entry.S / _entry is at 0x80000000,
+   * where qemu's -kernel jumps.
+   */
+  . = 0x80000000;这个就是设置entry入口为0x80000000，“."就是当前位置
+  /*
+   * 这里text里面存放的就是用户的代码
+
+  */
+  .text : {
+    *(.text .text.*)把目标文件中的所有.o文件中的text节都拿出来，生成一个全新的text节
+    . = ALIGN(0x1000);做一个4KB对齐
+    _trampoline = .;保存trampoline代码，记录当前位置
+    *(trampsec)	保存trampoline代码
+    . = ALIGN(0x1000);
+    ASSERT(. - _trampoline == 0x1000, "error: trampoline larger than one page");
+    PROVIDE(etext = .);
+  }
+
+  .rodata : {
+    . = ALIGN(16);
+    *(.srodata .srodata.*) /* do not need to distinguish this from .rodata */
+    . = ALIGN(16);
+    *(.rodata .rodata.*)
+  }
+
+  .data : {
+    . = ALIGN(16);
+    *(.sdata .sdata.*) /* do not need to distinguish this from .data */
+    . = ALIGN(16);
+    *(.data .data.*)
+  }
+
+  .bss : {
+    . = ALIGN(16);
+    *(.sbss .sbss.*) /* do not need to distinguish this from .bss */
+    . = ALIGN(16);
+    *(.bss .bss.*)
+  }
+
+  PROVIDE(end = .);
+}
+```
+
+![](https://cdn.jsdelivr.net/gh/zevin02/picb@master/imgss/SmartSelect_20221217_004333_Samsung%20Notes.jpg)
+
+![](https://cdn.jsdelivr.net/gh/zevin02/picb@master/imgss/20221217005945.png)
 
 ### build OBJS_KCSAN
 
@@ -94,7 +162,7 @@ riscv64-linux-gnu-objdump -t kernel/kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; 
 
 ## 生成一个fs.img可执行文件
 
-这个就是生成一个文件系统
+这个就是生成一个文件系统,相当于一个硬盘的镜像（用来存放用户程序的)
 
 这个可执行文件依赖于mkfs,README ,user的可执行文件,以及如果lab=util的话，还要有UPROGS
 
@@ -211,6 +279,30 @@ balloc: write bitmap block at sector 45
 
 
 ## 执行qemu
+
+qemu 依赖于kernel 和fs.img
+
+```
+
+QEMU = qemu-system-riscv64	# 指定QEMU版本risc-v 的CPU
+# --》 指定了使用的操作内核是kernel/kernel,-m 模拟了操作系统使用的内存128M，使用了3个cpu个数，
+QEMUOPTS = -machine virt -bios none -kernel $K/kernel -m 128M -smp $(CPUS) -nographic
+# 
+QEMUOPTS += -global virtio-mmio.force-legacy=false
+# 把文件系统挂载上去，最终就是模拟出来的一个计算机
+QEMUOPTS += -drive file=fs.img,if=none,format=raw,id=x0
+QEMUOPTS += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
+
+ifeq ($(LAB),net)
+QEMUOPTS += -netdev user,id=net0,hostfwd=udp::$(FWDPORT)-:2000 -object filter-dump,id=net0,netdev=net0,file=packets.pcap
+QEMUOPTS += -device e1000,netdev=net0,bus=pcie.0
+endif
+
+# qemu依赖于kernel， fs.img  
+qemu: $K/kernel fs.img
+	$(QEMU) $(QEMUOPTS)------->这里有了操作系统和用户程序还缺少硬件
+
+```
 
 qemu-system-riscv64 -machine virt -bios none -kernel kernel/kernel -m 128M -smp 3 -nographic -global virtio-mmio.force-legacy=false -drive file=fs.img,if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
 

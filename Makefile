@@ -302,8 +302,12 @@ endif
 
 FWDPORT = $(shell expr `id -u` % 5000 + 25999)
 # 这些都是make qemu的以一些参数
-QEMUOPTS = -machine virt -bios none -kernel $K/kernel -m 128M -smp $(CPUS) -nographic
+# 这里就是模拟的一些硬件
+# --》 指定了使用的操作内核是kernel/kernel,-m 模拟了操作系统使用的内存128M，使用了3个cpu个数，
+QEMUOPTS = -machine virt -bios none -kernel $K/kernel -m 128M -smp $(CPUS) -nographic	
+# 
 QEMUOPTS += -global virtio-mmio.force-legacy=false
+# 把文件系统挂载上去，最终就是模拟出来的一个计算机
 QEMUOPTS += -drive file=fs.img,if=none,format=raw,id=x0
 QEMUOPTS += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
 

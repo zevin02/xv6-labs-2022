@@ -1,5 +1,6 @@
+//这是一个链接脚本
 OUTPUT_ARCH( "riscv" )
-ENTRY( _entry )
+ENTRY( _entry )可执行文件的路口
 
 SECTIONS
 {
